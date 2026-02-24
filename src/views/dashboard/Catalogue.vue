@@ -61,7 +61,8 @@ const goToCreateMission = () => {
 };
 
 const editFormation = (id) => {
-  router.push(`/dashboard/catalogue/edit/${id}`);
+  console.log('[Catalogue] editFormation id:', id);
+  window.location.href = `/dashboard/catalogue/edit/${id}`;
 };
 
 const editMission = (id) => {
