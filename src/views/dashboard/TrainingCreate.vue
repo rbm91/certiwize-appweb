@@ -43,9 +43,17 @@ const progressValue = ref(0);
 const progressTime = ref(0);
 const formLoading = ref(false); // TOUJOURS false au départ — activé dans onMounted si édition
 const loadError = ref(null);
+const setupError = ref(null); // Erreur de setup visible dans le UI
 
-// Version marker pour vérifier le cache
-console.log('[TrainingCreate] v4 | mode:', isEditMode.value ? 'EDIT' : 'CREATE', '| id:', route.params.id || 'aucun');
+// Version marker VISIBLE — mise à jour à chaque build
+const BUILD_ID = 'v5-' + Date.now().toString(36);
+console.log('[TrainingCreate]', BUILD_ID, '| mode:', isEditMode.value ? 'EDIT' : 'CREATE', '| id:', route.params.id || 'aucun', '| auth:', !!authStore.user, '| org:', authStore.currentOrganization?.name || 'none');
+
+// Vérifier l'auth dès le setup
+if (!authStore.user) {
+  console.warn('[TrainingCreate] ATTENTION: Aucun utilisateur connecté!');
+  setupError.value = 'Vous devez être connecté pour créer ou modifier une formation.';
+}
 
 // PDF URL avec cache buster
 const pdfUrlWithCache = computed(() => {
@@ -375,8 +383,23 @@ const goBack = () => {
             <Button :label="t('training.back')" text @click="goBack" />
         </div>
 
+        <!-- Erreur d'authentification -->
+        <div v-if="setupError" class="card bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm">
+            <div class="flex items-start gap-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                <i class="pi pi-exclamation-triangle text-2xl text-orange-500 mt-1"></i>
+                <div>
+                    <h3 class="font-bold text-orange-700 dark:text-orange-400 mb-2">Problème de connexion</h3>
+                    <p class="text-orange-600 dark:text-orange-300 text-sm">{{ setupError }}</p>
+                    <div class="mt-4 flex gap-2">
+                        <a href="/login" class="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">Se connecter</a>
+                        <Button label="Réessayer" icon="pi pi-refresh" severity="secondary" size="small" @click="$router.go(0)" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- État de chargement -->
-        <div v-if="formLoading" class="card bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm text-center">
+        <div v-else-if="formLoading" class="card bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm text-center">
             <i class="pi pi-spin pi-spinner text-4xl text-blue-500 mb-4"></i>
             <p class="text-gray-600 dark:text-gray-300">Chargement de la formation...</p>
         </div>

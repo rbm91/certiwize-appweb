@@ -105,7 +105,16 @@ const missionTypeSeverity = (type) => {
 // -----------------------------------------------------------
 // Lifecycle
 // -----------------------------------------------------------
+console.log('[Catalogue] v5 | auth:', !!authStore.user, '| org:', authStore.currentOrganization?.name || 'none');
+
 onMounted(async () => {
+  // Vérifier l'auth
+  if (!authStore.user) {
+    console.warn('[Catalogue] Pas d\'utilisateur connecté');
+    loadErrorMsg.value = 'Vous devez être connecté pour voir vos formations. Allez sur /login pour vous connecter.';
+    return;
+  }
+
   loading.value = true;
   showSlowLoading.value = false;
   loadErrorMsg.value = null;

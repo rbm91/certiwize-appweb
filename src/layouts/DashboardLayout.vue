@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useLayoutStore } from '../stores/layout';
@@ -8,13 +8,35 @@ import Sidebar from '../components/dashboard/Sidebar.vue';
 import TopNavbar from '../components/dashboard/TopNavbar.vue';
 import TopnavSidebar from '../components/dashboard/TopnavSidebar.vue';
 
+const BUILD_VERSION = 'v5-' + new Date().toISOString().slice(0, 16);
+console.log('[DashboardLayout]', BUILD_VERSION, 'mounted');
+
 const authStore = useAuthStore();
 const layoutStore = useLayoutStore();
 const navConfigStore = useNavConfigStore();
 const route = useRoute();
 
+// Diagnostic : détecter les problèmes d'auth
+const showAuthWarning = computed(() => {
+  return authStore.initialized && !authStore.user;
+});
+
+const showInitWarning = computed(() => {
+  return !authStore.initialized;
+});
+
 // Charger la config de navigation au démarrage du dashboard
 onMounted(() => {
+  // Log diagnostic au montage
+  console.log('[DashboardLayout] Auth state:', {
+    initialized: authStore.initialized,
+    user: !!authStore.user,
+    userId: authStore.user?.id,
+    email: authStore.user?.email,
+    org: authStore.currentOrganization?.name || 'none',
+    role: authStore.userRole,
+  });
+
   navConfigStore.fetchConfig();
 });
 
@@ -46,6 +68,23 @@ watch(() => route.path, () => {
       </aside>
       <!-- Main content -->
       <main class="flex-1 overflow-y-auto">
+        <!-- Auth warning banners -->
+        <div v-if="showAuthWarning" class="m-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg">
+          <div class="flex items-center gap-3">
+            <i class="pi pi-exclamation-triangle text-2xl text-red-600"></i>
+            <div>
+              <p class="font-bold text-red-700 dark:text-red-400">Session expirée ou non connecté</p>
+              <p class="text-sm text-red-600 dark:text-red-300 mt-1">Vous devez vous connecter pour accéder au dashboard.</p>
+              <a href="/login" class="inline-block mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium">Se connecter</a>
+            </div>
+          </div>
+        </div>
+        <div v-if="showInitWarning" class="m-4 p-4 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+          <div class="flex items-center gap-3">
+            <i class="pi pi-spin pi-spinner text-xl text-yellow-600"></i>
+            <p class="text-yellow-700 dark:text-yellow-400">Initialisation de l'authentification en cours...</p>
+          </div>
+        </div>
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
             <component :is="Component" :key="$route.fullPath" />
@@ -89,6 +128,24 @@ watch(() => route.path, () => {
     <main class="flex-1 overflow-y-auto">
       <!-- Spacer for mobile menu button -->
       <div class="md:hidden h-16"></div>
+
+      <!-- Auth warning banners -->
+      <div v-if="showAuthWarning" class="m-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg">
+        <div class="flex items-center gap-3">
+          <i class="pi pi-exclamation-triangle text-2xl text-red-600"></i>
+          <div>
+            <p class="font-bold text-red-700 dark:text-red-400">Session expirée ou non connecté</p>
+            <p class="text-sm text-red-600 dark:text-red-300 mt-1">Vous devez vous connecter pour accéder au dashboard.</p>
+            <a href="/login" class="inline-block mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium">Se connecter</a>
+          </div>
+        </div>
+      </div>
+      <div v-if="showInitWarning" class="m-4 p-4 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+        <div class="flex items-center gap-3">
+          <i class="pi pi-spin pi-spinner text-xl text-yellow-600"></i>
+          <p class="text-yellow-700 dark:text-yellow-400">Initialisation de l'authentification en cours...</p>
+        </div>
+      </div>
 
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
