@@ -1,48 +1,79 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useTrainingStore } from '../../stores/training';
-import { useAuthStore } from '../../stores/auth';
-import { supabase } from '../../supabase';
-import { useI18n } from 'vue-i18n';
+import { ref } from 'vue';
+import { useRoute } from 'vue-router';
 
-// Imports PrimeVue
-import InputText from 'primevue/inputtext';
-import Textarea from 'primevue/textarea';
-import InputNumber from 'primevue/inputnumber';
-import Button from 'primevue/button';
-import Calendar from 'primevue/calendar';
-import Message from 'primevue/message';
-import Dropdown from 'primevue/dropdown';
-import ProgressBar from 'primevue/progressbar';
-import { useConfirm } from 'primevue/useconfirm';
-import { useFormValidation } from '../../composables/useFormValidation';
-
-// === TOUS les composables ===
-const confirm = useConfirm();
 const route = useRoute();
-const router = useRouter();
-const trainingStore = useTrainingStore();
-const authStore = useAuthStore();
-const { errors, validate, clearError } = useFormValidation();
-const { t } = useI18n();
-
 const id = route.params.id;
-const setupOk = ref(true);
+const results = ref([]);
+
+// Test chaque import/composable individuellement
+const test = async (name, fn) => {
+    try {
+        await fn();
+        results.value.push({ name, ok: true });
+    } catch (e) {
+        results.value.push({ name, ok: false, error: e.message });
+    }
+};
+
+// 1. Imports dynamiques pour détecter les modules cassés
+test('useRouter', async () => {
+    const { useRouter } = await import('vue-router');
+    useRouter();
+});
+
+test('useTrainingStore', async () => {
+    const { useTrainingStore } = await import('../../stores/training');
+    useTrainingStore();
+});
+
+test('useAuthStore', async () => {
+    const { useAuthStore } = await import('../../stores/auth');
+    useAuthStore();
+});
+
+test('supabase', async () => {
+    const { supabase } = await import('../../supabase');
+    if (!supabase) throw new Error('supabase is null');
+});
+
+test('useI18n', async () => {
+    const { useI18n } = await import('vue-i18n');
+    useI18n();
+});
+
+test('useConfirm', async () => {
+    const { useConfirm } = await import('primevue/useconfirm');
+    useConfirm();
+});
+
+test('useFormValidation', async () => {
+    const { useFormValidation } = await import('../../composables/useFormValidation');
+    useFormValidation();
+});
+
+test('InputText', async () => { await import('primevue/inputtext'); });
+test('Textarea', async () => { await import('primevue/textarea'); });
+test('InputNumber', async () => { await import('primevue/inputnumber'); });
+test('Button', async () => { await import('primevue/button'); });
+test('Calendar', async () => { await import('primevue/calendar'); });
+test('Message', async () => { await import('primevue/message'); });
+test('Dropdown', async () => { await import('primevue/dropdown'); });
+test('ProgressBar', async () => { await import('primevue/progressbar'); });
 </script>
 
 <template>
     <div class="p-8">
-        <h1 class="text-3xl font-bold text-green-600">SETUP OK — Tous les imports fonctionnent</h1>
-        <p class="mt-4">Mode: {{ id ? 'EDITION' : 'CREATION' }}</p>
-        <p v-if="id" class="mt-2 text-gray-500">ID: {{ id }}</p>
-        <p class="mt-4">Auth user: {{ authStore.user?.email || 'non connecté' }}</p>
-        <p>Org: {{ authStore.currentOrganization?.name || 'aucune' }}</p>
-        <p>isSuperAdmin: {{ authStore.isSuperAdmin }}</p>
+        <h1 class="text-2xl font-bold mb-4">Diagnostic TrainingCreate</h1>
+        <p class="mb-2 text-gray-500">ID: {{ id }}</p>
 
-        <!-- Test rapide d'un composant PrimeVue -->
-        <div class="mt-6">
-            <Button label="Test PrimeVue Button" icon="pi pi-check" />
+        <div v-if="results.length === 0" class="text-gray-400">Chargement des tests...</div>
+
+        <div v-for="r in results" :key="r.name" class="flex items-center gap-3 py-1">
+            <span v-if="r.ok" class="text-green-600 font-bold">✅</span>
+            <span v-else class="text-red-600 font-bold">❌</span>
+            <span class="font-mono text-sm">{{ r.name }}</span>
+            <span v-if="!r.ok" class="text-red-500 text-xs">{{ r.error }}</span>
         </div>
     </div>
 </template>
