@@ -41,6 +41,8 @@ const submitting = ref(false);
 const isEditMode = computed(() => !!route.params.id);
 const progressValue = ref(0); // Progression en % (0-100)
 const progressTime = ref(0); // Temps écoulé en secondes
+const formLoading = ref(!!route.params.id); // true si mode édition (le temps de charger)
+const loadError = ref(null); // Message d'erreur si chargement échoue
 
 // PDF URL avec cache buster
 const pdfUrlWithCache = computed(() => {
@@ -119,7 +121,11 @@ watch([() => form.value.horaires_debut, () => form.value.horaires_fin], () => {
 // Charger la formation si on est en mode édition
 onMounted(async () => {
     if (trainingId.value) {
+        formLoading.value = true;
+        loadError.value = null;
         try {
+            console.log('[TrainingCreate] Chargement formation:', trainingId.value);
+
             // Charger par ID uniquement — le RLS gère l'accès
             const { data, error } = await supabase
                 .from('formations')
@@ -127,29 +133,28 @@ onMounted(async () => {
                 .eq('id', trainingId.value)
                 .maybeSingle();
 
+            console.log('[TrainingCreate] Résultat:', { data: !!data, error });
+
             if (error) throw error;
 
             if (!data) {
-                console.warn('Formation introuvable:', trainingId.value);
-                router.push('/dashboard/catalogue');
+                loadError.value = `Formation introuvable (ID: ${trainingId.value}). Vérifiez que la formation existe et que vous avez les droits d'accès.`;
+                formLoading.value = false;
                 return;
             }
 
             // Charger les données du contenu dans le formulaire
             if (data.content) {
                 form.value = { ...form.value, ...data.content };
-                // Convertir la date si elle existe
                 if (data.content.maj) {
                     form.value.maj = new Date(data.content.maj);
                 }
-                // Convertir les dates si elles existent
                 if (data.content.dates) {
                     form.value.dates = new Date(data.content.dates);
                 }
                 if (data.content.dates_fin) {
                     form.value.dates_fin = new Date(data.content.dates_fin);
                 }
-                // Parser les horaires au format "09h00 - 17h00" vers des objets Date
                 if (data.content.horaires && typeof data.content.horaires === 'string') {
                     const match = data.content.horaires.match(/(\d{2})h(\d{2})\s*-\s*(\d{2})h(\d{2})/);
                     if (match) {
@@ -167,8 +172,10 @@ onMounted(async () => {
                 }
             }
         } catch (err) {
-            console.error('Erreur chargement formation:', err);
-            router.push('/dashboard/catalogue');
+            console.error('[TrainingCreate] Erreur chargement:', err);
+            loadError.value = `Erreur de chargement : ${err.message}`;
+        } finally {
+            formLoading.value = false;
         }
     }
 });
@@ -356,8 +363,8 @@ const goBack = () => {
 </script>
 
 <template>
-    <div class="max-w-5xl mx-auto pb-20">
-        
+    <div class="max-w-5xl mx-auto pb-20 p-6">
+
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
                 {{ isEditMode ? t('training.edit_title') : t('training.new_title') }}
@@ -365,7 +372,28 @@ const goBack = () => {
             <Button :label="t('training.back')" text @click="goBack" />
         </div>
 
-        <div v-if="pdfUrl" class="card bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-[80vh] flex flex-col">
+        <!-- État de chargement -->
+        <div v-if="formLoading" class="card bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm text-center">
+            <i class="pi pi-spin pi-spinner text-4xl text-blue-500 mb-4"></i>
+            <p class="text-gray-600 dark:text-gray-300">Chargement de la formation...</p>
+        </div>
+
+        <!-- Erreur de chargement -->
+        <div v-else-if="loadError" class="card bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm">
+            <div class="flex items-start gap-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <i class="pi pi-exclamation-triangle text-2xl text-red-500 mt-1"></i>
+                <div>
+                    <h3 class="font-bold text-red-700 dark:text-red-400 mb-2">Impossible de charger la formation</h3>
+                    <p class="text-red-600 dark:text-red-300 text-sm">{{ loadError }}</p>
+                    <div class="mt-4 flex gap-2">
+                        <Button label="Retour au catalogue" icon="pi pi-arrow-left" severity="secondary" @click="goBack" />
+                        <Button label="Réessayer" icon="pi pi-refresh" @click="$router.go(0)" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="pdfUrl" class="card bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-[80vh] flex flex-col">
             <div class="flex justify-between items-center mb-4">
                 <div class="flex items-center gap-2 text-green-600">
                     <i class="pi pi-check-circle text-xl"></i>
