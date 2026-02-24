@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch, onErrorCaptured } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTrainingStore } from '../../stores/training';
 import { useAuthStore } from '../../stores/auth';
@@ -36,8 +36,16 @@ const progressTime = ref(0);
 const formLoading = ref(false);
 const loadError = ref(null);
 const titleError = ref(false);
+const componentReady = ref(true);
+const fatalError = ref(null);
 
-console.log('[TrainingCreate] v6 | mode:', isEditMode.value ? 'EDIT' : 'CREATE');
+console.log('[TrainingCreate] v7 | mode:', isEditMode.value ? 'EDIT' : 'CREATE', '| id:', route.params.id);
+
+onErrorCaptured((err) => {
+    console.error('[TrainingCreate] FATAL:', err);
+    fatalError.value = err.message || String(err);
+    return false;
+});
 
 const pdfUrlWithCache = computed(() => {
     if (!pdfUrl.value) return null;
@@ -256,6 +264,11 @@ const goBack = () => {
 
 <template>
     <div class="max-w-5xl mx-auto pb-20 p-6">
+
+        <!-- ERREUR FATALE -->
+        <div v-if="fatalError" class="p-4 mb-4 bg-red-100 border border-red-400 rounded text-red-800">
+            <strong>Erreur composant :</strong> {{ fatalError }}
+        </div>
 
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
