@@ -1,56 +1,42 @@
 import { supabase } from '../supabase';
 import { useAuthStore } from '../stores/auth';
-import { USER_ROLES } from '../config/constants';
 
 /**
- * Composable pour créer des requêtes Supabase filtrées par rôle utilisateur
- * Élimine la duplication du code de filtrage admin/user dans 3+ stores
+ * Composable pour créer des requêtes Supabase filtrées par organisation.
+ * Remplace l'ancien filtrage par user_id par un filtrage par organization_id.
  *
  * @param {string} tableName - Nom de la table Supabase
- * @param {string} selectClause - Clause SELECT (défaut: '*, profiles(email)')
+ * @param {string} selectClause - Clause SELECT (défaut: '*')
  * @returns {Object} - Méthodes pour construire des requêtes authentifiées
- *
- * @example
- * // Dans un store
- * const { buildQuery, fetchAll } = useAuthenticatedQuery('projects');
- *
- * // Méthode 1: Construire manuellement
- * const query = buildQuery().order('created_at', { ascending: false });
- * const { data, error } = await query;
- *
- * // Méthode 2: Utiliser fetchAll
- * const { data, error } = await fetchAll({ orderBy: 'created_at', ascending: false });
  */
-export const useAuthenticatedQuery = (tableName, selectClause = '*, profiles(email)') => {
+export const useAuthenticatedQuery = (tableName, selectClause = '*') => {
   const auth = useAuthStore();
 
   /**
-   * Construit une requête de base filtrée par rôle
-   * @param {string} customSelect - Clause SELECT personnalisée (optionnel)
-   * @returns {Object} - Query builder Supabase
+   * Construit une requête de base filtrée par organisation.
+   * - Super-admin : voit tout
+   * - Membre d'org : voit uniquement les données de son organisation
    */
   const buildQuery = (customSelect = null) => {
-    const isAdmin = auth.userRole === USER_ROLES.ADMIN;
     const select = customSelect || selectClause;
-
     let query = supabase.from(tableName).select(select);
 
-    // Filtrer par user_id si l'utilisateur n'est pas admin
-    if (!isAdmin && auth.user?.id) {
-      query = query.eq('user_id', auth.user.id);
+    // Super-admin voit toutes les données
+    if (auth.isSuperAdmin) {
+      return query;
+    }
+
+    // Filtrer par organization_id
+    const orgId = auth.currentOrganization?.id;
+    if (orgId) {
+      query = query.eq('organization_id', orgId);
     }
 
     return query;
   };
 
   /**
-   * Récupère tous les enregistrements avec filtrage par rôle
-   * @param {Object} options - Options de requête
-   * @param {string} options.orderBy - Champ de tri
-   * @param {boolean} options.ascending - Ordre croissant (défaut: false)
-   * @param {number} options.limit - Limite de résultats
-   * @param {string} options.select - Clause SELECT personnalisée
-   * @returns {Promise<{data, error}>} - Résultat de la requête
+   * Récupère tous les enregistrements avec filtrage par organisation
    */
   const fetchAll = async (options = {}) => {
     const {
@@ -62,12 +48,10 @@ export const useAuthenticatedQuery = (tableName, selectClause = '*, profiles(ema
 
     let query = buildQuery(select);
 
-    // Appliquer le tri
     if (orderBy) {
       query = query.order(orderBy, { ascending });
     }
 
-    // Appliquer la limite
     if (limit) {
       query = query.limit(limit);
     }
@@ -76,62 +60,59 @@ export const useAuthenticatedQuery = (tableName, selectClause = '*, profiles(ema
   };
 
   /**
-   * Récupère un enregistrement par ID avec vérification de propriété
-   * @param {string|number} id - ID de l'enregistrement
-   * @param {string} customSelect - Clause SELECT personnalisée (optionnel)
-   * @returns {Promise<{data, error}>} - Résultat de la requête
+   * Récupère un enregistrement par ID avec vérification d'accès
    */
   const fetchById = async (id, customSelect = null) => {
     const select = customSelect || selectClause;
     let query = supabase.from(tableName).select(select).eq('id', id);
 
-    // Si non-admin, vérifier que l'enregistrement appartient à l'utilisateur
-    const isAdmin = auth.userRole === USER_ROLES.ADMIN;
-    if (!isAdmin && auth.user?.id) {
-      query = query.eq('user_id', auth.user.id);
+    // Si non super-admin, vérifier que l'enregistrement appartient à l'org
+    if (!auth.isSuperAdmin) {
+      const orgId = auth.currentOrganization?.id;
+      if (orgId) {
+        query = query.eq('organization_id', orgId);
+      }
     }
 
     return await query.single();
   };
 
   /**
-   * Compte les enregistrements avec filtrage par rôle
-   * @returns {Promise<{count, error}>} - Nombre d'enregistrements
+   * Compte les enregistrements avec filtrage par organisation
    */
   const count = async () => {
-    const isAdmin = auth.userRole === USER_ROLES.ADMIN;
-
     let query = supabase
       .from(tableName)
       .select('*', { count: 'exact', head: true });
 
-    if (!isAdmin && auth.user?.id) {
-      query = query.eq('user_id', auth.user.id);
+    if (!auth.isSuperAdmin) {
+      const orgId = auth.currentOrganization?.id;
+      if (orgId) {
+        query = query.eq('organization_id', orgId);
+      }
     }
 
     return await query;
   };
 
   /**
-   * Vérifie si l'utilisateur actuel est propriétaire d'un enregistrement
-   * @param {string|number} id - ID de l'enregistrement
-   * @returns {Promise<boolean>} - True si propriétaire ou admin
+   * Vérifie si l'enregistrement appartient à l'organisation courante
    */
   const isOwner = async (id) => {
-    const isAdmin = auth.userRole === USER_ROLES.ADMIN;
-    if (isAdmin) return true;
+    if (auth.isSuperAdmin) return true;
 
-    if (!auth.user?.id) return false;
+    const orgId = auth.currentOrganization?.id;
+    if (!orgId) return false;
 
     const { data, error } = await supabase
       .from(tableName)
-      .select('user_id')
+      .select('organization_id')
       .eq('id', id)
       .single();
 
     if (error) return false;
 
-    return data.user_id === auth.user.id;
+    return data.organization_id === orgId;
   };
 
   return {

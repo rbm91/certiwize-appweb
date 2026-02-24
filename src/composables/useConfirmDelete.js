@@ -2,6 +2,7 @@ import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 import { useI18n } from 'vue-i18n';
 import { supabase } from '../supabase';
+import { useAuthStore } from '../stores/auth';
 import { TIMEOUTS, TOAST_SEVERITY } from '../config/constants';
 
 /**
@@ -20,6 +21,7 @@ export const useConfirmDelete = (tableName, onDeleteSuccess = null) => {
   const confirm = useConfirm();
   const toast = useToast();
   const { t } = useI18n();
+  const authStore = useAuthStore();
 
   /**
    * Affiche une boîte de dialogue de confirmation puis supprime l'enregistrement
@@ -45,10 +47,18 @@ export const useConfirmDelete = (tableName, onDeleteSuccess = null) => {
       rejectLabel: t('common.cancel') || 'Annuler',
       accept: async () => {
         try {
-          const { error } = await supabase
+          // Filtrer par organization_id pour éviter les suppressions cross-tenant
+          const orgId = authStore.currentOrganization?.id;
+          let query = supabase
             .from(tableName)
             .delete()
             .eq('id', id);
+
+          if (orgId) {
+            query = query.eq('organization_id', orgId);
+          }
+
+          const { error } = await query;
 
           if (error) throw error;
 
@@ -83,10 +93,18 @@ export const useConfirmDelete = (tableName, onDeleteSuccess = null) => {
    */
   const deleteWithoutConfirm = async (id) => {
     try {
-      const { error } = await supabase
+      // Filtrer par organization_id pour éviter les suppressions cross-tenant
+      const orgId = authStore.currentOrganization?.id;
+      let query = supabase
         .from(tableName)
         .delete()
         .eq('id', id);
+
+      if (orgId) {
+        query = query.eq('organization_id', orgId);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
 

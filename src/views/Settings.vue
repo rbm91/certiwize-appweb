@@ -12,6 +12,7 @@ import TabList from 'primevue/tablist';
 import Tab from 'primevue/tab';
 import TabPanels from 'primevue/tabpanels';
 import TabPanel from 'primevue/tabpanel';
+import { useFormValidation } from '../composables/useFormValidation';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -23,7 +24,12 @@ const email = ref(authStore.user?.email || '');
 const loadingProfile = ref(false);
 const profileMsg = ref({ type: '', content: '' });
 
+const { errors: profileErrors, validate: validateProfile, clearError: clearProfileError } = useFormValidation();
+
 const updateProfile = async () => {
+  const isValid = validateProfile({ fullName: fullName.value });
+  if (!isValid) return;
+
   loadingProfile.value = true;
   profileMsg.value = { type: '', content: '' };
 
@@ -50,14 +56,18 @@ const confirmPassword = ref('');
 const loadingPassword = ref(false);
 const passwordMsg = ref({ type: '', content: '' });
 
+const { errors: pwdErrors, validate: validatePwd, clearError: clearPwdError } = useFormValidation();
+
 const updatePassword = async () => {
+  const isValid = validatePwd({
+    currentPassword: currentPassword.value,
+    newPassword: newPassword.value,
+    confirmPassword: confirmPassword.value,
+  });
+  if (!isValid) return;
+
   if (newPassword.value !== confirmPassword.value) {
     passwordMsg.value = { type: 'error', content: t('settings.password_mismatch') };
-    return;
-  }
-
-  if (!currentPassword.value) {
-    passwordMsg.value = { type: 'error', content: t('settings.password_required') };
     return;
   }
 
@@ -128,7 +138,7 @@ const deleteAccount = async () => {
                 <form @submit.prevent="updateProfile" class="space-y-6">
                   <div class="flex flex-col gap-2">
                     <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('settings.full_name') }}</label>
-                    <InputText v-model="fullName" class="w-full" />
+                    <InputText v-model="fullName" class="w-full" :invalid="!!profileErrors.fullName" @input="clearProfileError('fullName')" />
                   </div>
 
                   <div class="flex flex-col gap-2">
@@ -154,18 +164,18 @@ const deleteAccount = async () => {
                 <form @submit.prevent="updatePassword" class="space-y-6">
                   <div class="flex flex-col gap-2">
                     <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('settings.current_password') }}</label>
-                    <Password v-model="currentPassword" toggleMask :feedback="false" class="w-full" inputClass="w-full" required />
+                    <Password v-model="currentPassword" toggleMask :feedback="false" class="w-full" inputClass="w-full" :invalid="!!pwdErrors.currentPassword" @input="clearPwdError('currentPassword')" />
                     <small class="text-gray-500">{{ t('settings.current_password_note') }}</small>
                   </div>
 
                   <div class="flex flex-col gap-2">
                     <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('settings.new_password') }}</label>
-                    <Password v-model="newPassword" toggleMask class="w-full" inputClass="w-full" required />
+                    <Password v-model="newPassword" toggleMask class="w-full" inputClass="w-full" :invalid="!!pwdErrors.newPassword" @input="clearPwdError('newPassword')" />
                   </div>
 
                   <div class="flex flex-col gap-2">
                     <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('settings.confirm_password') }}</label>
-                    <Password v-model="confirmPassword" toggleMask :feedback="false" class="w-full" inputClass="w-full" required />
+                    <Password v-model="confirmPassword" toggleMask :feedback="false" class="w-full" inputClass="w-full" :invalid="!!pwdErrors.confirmPassword" @input="clearPwdError('confirmPassword')" />
                   </div>
 
                   <Message v-if="passwordMsg.content" :severity="passwordMsg.type" :closable="false">

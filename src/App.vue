@@ -1,12 +1,15 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import Navbar from './components/Navbar.vue';
 import ChatWidget from './components/ChatWidget.vue';
 import Toast from 'primevue/toast';
 import { useAuthStore } from './stores/auth';
 
 const authStore = useAuthStore();
+const route = useRoute();
+const isDashboardRoute = computed(() => route.path.startsWith('/dashboard'));
 const { locale } = useI18n();
 
 // Timestamp du dernier rafraîchissement pour éviter les rafraîchissements trop fréquents
@@ -61,9 +64,9 @@ onUnmounted(() => {
 
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300 flex flex-col">
-    <Navbar />
+    <Navbar v-if="!isDashboardRoute" />
 
-    <main class="flex-grow pt-16">
+    <main :class="isDashboardRoute ? 'flex-grow' : 'flex-grow pt-16'">
       <router-view />
     </main>
 

@@ -6,6 +6,7 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Message from 'primevue/message';
 import Card from 'primevue/card';
+import { useFormValidation } from '../../composables/useFormValidation';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -23,6 +24,7 @@ const form = ref({
 
 const loading = ref(false);
 const errorMsg = ref('');
+const { errors, validate, clearError } = useFormValidation();
 
 // Selected plan
 const selectedPlan = ref(route.query.plan || 'monthly');
@@ -49,7 +51,12 @@ const currentPlan = computed(() => plans[selectedPlan.value] || plans.monthly);
 const handleCheckout = async () => {
   errorMsg.value = '';
 
-  if (!form.value.firstName || !form.value.lastName || !form.value.email) {
+  const isValid = validate({
+    firstName: form.value.firstName,
+    lastName: form.value.lastName,
+    email: form.value.email,
+  });
+  if (!isValid) {
     errorMsg.value = t('checkout.validation.required_fields');
     return;
   }
@@ -144,7 +151,8 @@ onMounted(() => {
                       type="text"
                       class="w-full"
                       :placeholder="t('checkout.form.first_name_placeholder')"
-                      required
+                      :invalid="!!errors.firstName"
+                      @input="clearError('firstName')"
                     />
                   </div>
                   <div>
@@ -156,7 +164,8 @@ onMounted(() => {
                       type="text"
                       class="w-full"
                       :placeholder="t('checkout.form.last_name_placeholder')"
-                      required
+                      :invalid="!!errors.lastName"
+                      @input="clearError('lastName')"
                     />
                   </div>
                 </div>
@@ -197,7 +206,8 @@ onMounted(() => {
                     type="email"
                     class="w-full"
                     :placeholder="t('checkout.form.email_placeholder')"
-                    required
+                    :invalid="!!errors.email"
+                    @input="clearError('email')"
                   />
                   <small class="text-gray-500 dark:text-gray-400 mt-1 block">
                     {{ t('checkout.form.email_helper') }}

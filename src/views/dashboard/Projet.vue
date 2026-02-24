@@ -54,15 +54,16 @@ const fetchProjects = async () => {
 
   try {
     await auth.refreshSession();
-    const checkAdmin = auth.userRole === 'admin';
+    const orgId = auth.currentOrganization?.id;
 
     let query = supabase
       .from('projects')
       .select('*, profiles(email)')
       .order('updated_at', { ascending: false });
 
-    if (!checkAdmin) {
-      query = query.eq('user_id', auth.user.id);
+    // Filtrer par organisation (super_admin voit tout)
+    if (!auth.isSuperAdmin && orgId) {
+      query = query.eq('organization_id', orgId);
     }
 
     const { data, error } = await query;
@@ -99,7 +100,10 @@ const deleteProject = (id) => {
     accept: async () => {
       try {
         await auth.refreshSession();
-        const { error } = await supabase.from('projects').delete().eq('id', id);
+        const orgId = auth.currentOrganization?.id;
+        let deleteQuery = supabase.from('projects').delete().eq('id', id);
+        if (orgId) deleteQuery = deleteQuery.eq('organization_id', orgId);
+        const { error } = await deleteQuery;
         if (error) throw error;
         projects.value = projects.value.filter(p => p.id !== id);
         toast.add({ severity: 'success', summary: 'Succès', detail: 'Projet supprimé', life: 3000 });
@@ -142,10 +146,13 @@ const validateProject = (id) => {
     accept: async () => {
       try {
         await auth.refreshSession();
-        const { error } = await supabase
+        const orgId = auth.currentOrganization?.id;
+        let validateQuery = supabase
           .from('projects')
           .update({ status: 'Validé' })
           .eq('id', id);
+        if (orgId) validateQuery = validateQuery.eq('organization_id', orgId);
+        const { error } = await validateQuery;
 
         if (error) throw error;
 
@@ -179,10 +186,13 @@ const finishProject = (id) => {
     accept: async () => {
       try {
         await auth.refreshSession();
-        const { error } = await supabase
+        const orgId = auth.currentOrganization?.id;
+        let finishQuery = supabase
           .from('projects')
           .update({ status: 'Terminé' })
           .eq('id', id);
+        if (orgId) finishQuery = finishQuery.eq('organization_id', orgId);
+        const { error } = await finishQuery;
 
         if (error) throw error;
 

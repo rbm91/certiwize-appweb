@@ -16,8 +16,13 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref(null);
   const session = ref(null);
   const initialized = ref(false);
-  const userRole = ref('user'); // 'admin' ou 'user'
+  const userRole = ref('user'); // 'user' ou 'super_admin' (niveau plateforme)
   const router = useRouter();
+
+  // ── Multi-tenant : organisation courante ──
+  const currentOrganization = ref(null);  // { id, name, slug }
+  const organizationRole = ref(null);     // 'owner' | 'admin' | 'member'
+  const organizations = ref([]);          // liste des orgs de l'utilisateur
 
   // Subscription pour le listener auth (pour cleanup)
   let authSubscription = null;
@@ -26,8 +31,11 @@ export const useAuthStore = defineStore('auth', () => {
   let initPromise = null;
   let initResolve = null;
 
-  // Computed pour vérifier si l'utilisateur est admin
-  const isAdmin = computed(() => userRole.value === 'admin');
+  // ── Computed ──
+  const isAdmin = computed(() => userRole.value === 'super_admin');
+  const isSuperAdmin = computed(() => userRole.value === 'super_admin');
+  const isOrgOwner = computed(() => organizationRole.value === 'owner');
+  const isOrgAdmin = computed(() => organizationRole.value === 'owner' || organizationRole.value === 'admin');
 
   // Charger le rôle depuis la table profiles
   const fetchUserRole = async (userId) => {
@@ -36,17 +44,68 @@ export const useAuthStore = defineStore('auth', () => {
         .from('profiles')
         .select('role')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('[AuthStore] Error fetching user role:', error);
         userRole.value = 'user';
       } else {
-        userRole.value = data.role || 'user';
+        userRole.value = data?.role || 'user';
       }
     } catch (err) {
       console.error('[AuthStore] Exception fetching user role:', err);
       userRole.value = 'user';
+    }
+  };
+
+  // Charger les organisations de l'utilisateur
+  const fetchUserOrganizations = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('organization_members')
+        .select('role, organization_id, organizations(id, name, slug)')
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('[AuthStore] Error fetching organizations:', error);
+        organizations.value = [];
+        return;
+      }
+
+      organizations.value = (data || []).map(m => ({
+        id: m.organizations.id,
+        name: m.organizations.name,
+        slug: m.organizations.slug,
+        role: m.role,
+      }));
+
+      // Si pas d'org courante, sélectionner la première
+      if (organizations.value.length > 0 && !currentOrganization.value) {
+        await setCurrentOrganization(organizations.value[0].id);
+      } else if (currentOrganization.value) {
+        // Vérifier que l'org courante est toujours accessible
+        const stillMember = organizations.value.find(o => o.id === currentOrganization.value.id);
+        if (stillMember) {
+          organizationRole.value = stillMember.role;
+        } else if (organizations.value.length > 0) {
+          await setCurrentOrganization(organizations.value[0].id);
+        } else {
+          currentOrganization.value = null;
+          organizationRole.value = null;
+        }
+      }
+    } catch (err) {
+      console.error('[AuthStore] Exception fetching organizations:', err);
+      organizations.value = [];
+    }
+  };
+
+  // Changer l'organisation courante
+  const setCurrentOrganization = async (orgId) => {
+    const org = organizations.value.find(o => o.id === orgId);
+    if (org) {
+      currentOrganization.value = { id: org.id, name: org.name, slug: org.slug };
+      organizationRole.value = org.role;
     }
   };
 
@@ -67,19 +126,19 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = null;
         session.value = null;
         userRole.value = 'user';
+        currentOrganization.value = null;
+        organizationRole.value = null;
+        organizations.value = [];
 
         // Vérifier que le router est disponible et que l'app est montée
-        // avant de naviguer pour éviter les pages blanches
         if (router && initialized.value) {
           try {
             await router.push('/login');
           } catch (err) {
             console.warn('[AuthStore] Navigation to /login failed during cross-tab sync:', err);
-            // Fallback: recharger la page si la navigation échoue
             window.location.href = '/login';
           }
         } else {
-          // Si l'app n'est pas encore initialisée, recharger directement
           window.location.href = '/login';
         }
         break;
@@ -87,13 +146,13 @@ export const useAuthStore = defineStore('auth', () => {
       case 'SIGNED_IN':
       case 'TOKEN_REFRESHED':
         // Un autre onglet s'est connecté ou a rafraîchi le token
-        // Récupérer la session actuelle depuis Supabase
         try {
           const { data: sessionData } = await supabase.auth.getSession();
           if (sessionData.session) {
             session.value = sessionData.session;
             user.value = sessionData.session.user;
             await fetchUserRole(sessionData.session.user.id);
+            await fetchUserOrganizations(sessionData.session.user.id);
           }
         } catch (err) {
           console.error('[AuthStore] Error syncing session from cross-tab:', err);
@@ -101,9 +160,15 @@ export const useAuthStore = defineStore('auth', () => {
         break;
 
       case 'USER_UPDATED':
-        // Un autre onglet a mis à jour le profil
         if (data?.user && user.value) {
           user.value = { ...user.value, ...data.user };
+        }
+        break;
+
+      case 'ORG_CHANGED':
+        // Un autre onglet a changé d'organisation
+        if (data?.orgId) {
+          await setCurrentOrganization(data.orgId);
         }
         break;
     }
@@ -136,6 +201,7 @@ export const useAuthStore = defineStore('auth', () => {
         session.value = data.session;
         user.value = data.session.user;
         await fetchUserRole(data.session.user.id);
+        await fetchUserOrganizations(data.session.user.id);
       }
 
       // Nettoyer l'ancienne subscription si elle existe
@@ -144,21 +210,38 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       // Créer le listener auth et stocker la subscription
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, _session) => {
+      // IMPORTANT: Ne PAS faire d'appels async Supabase dans ce callback
+      // car il s'exécute à l'intérieur du lock auth → deadlock (supabase-js #1594)
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, _session) => {
         session.value = _session;
         user.value = _session ? _session.user : null;
 
         if (_session?.user) {
-          await fetchUserRole(_session.user.id);
+          // fetchUserRole et fetchUserOrganizations en arrière-plan (sans await)
+          fetchUserRole(_session.user.id).catch(err => {
+            console.warn('[AuthStore] Background fetchUserRole failed:', err);
+          });
+          fetchUserOrganizations(_session.user.id).catch(err => {
+            console.warn('[AuthStore] Background fetchUserOrganizations failed:', err);
+          });
         } else {
           userRole.value = 'user';
+          currentOrganization.value = null;
+          organizationRole.value = null;
+          organizations.value = [];
         }
 
         // Broadcast l'événement aux autres onglets
         switch (event) {
-          case 'SIGNED_IN':
+          case 'SIGNED_IN': {
             broadcastAuthEvent('SIGNED_IN', { userId: _session?.user?.id });
+            // Si l'utilisateur arrive via un lien d'invitation, rediriger vers la création de mot de passe
+            const hash = window.location.hash;
+            if (hash && hash.includes('type=invite')) {
+              router.push('/update-password');
+            }
             break;
+          }
           case 'SIGNED_OUT':
             broadcastAuthEvent('SIGNED_OUT', null);
             break;
@@ -212,21 +295,29 @@ export const useAuthStore = defineStore('auth', () => {
       authSubscription.unsubscribe();
       authSubscription = null;
     }
-    // Ne pas fermer le BroadcastChannel car il est partagé au niveau du module
-    // et peut encore être utilisé par d'autres composants dans cet onglet.
-    // Le channel se fermera automatiquement quand l'onglet sera fermé.
     if (authChannel) {
-      authChannel.onmessage = null; // Retirer seulement le listener
+      authChannel.onmessage = null;
     }
   };
 
   const signIn = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    // Mettre à jour immédiatement le state sans attendre onAuthStateChange
+    if (data.session) {
+      session.value = data.session;
+      user.value = data.session.user;
+      await fetchUserRole(data.session.user.id);
+      await fetchUserOrganizations(data.session.user.id);
+    }
   };
 
-  const signUp = async (email, password, fullName) => {
-    const { error } = await supabase.auth.signUp({
+  /**
+   * Inscription avec création automatique de l'organisation.
+   * Si inviteToken est fourni, rejoint l'organisation liée à l'invitation.
+   */
+  const signUp = async (email, password, fullName, organizationName = null, inviteToken = null) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -234,6 +325,98 @@ export const useAuthStore = defineStore('auth', () => {
       }
     });
     if (error) throw error;
+
+    const userId = data.user?.id;
+    if (!userId) return;
+
+    if (inviteToken) {
+      // Rejoindre une organisation existante via invitation
+      const { data: invitation, error: inviteErr } = await supabase
+        .from('invitations')
+        .select('*')
+        .eq('token', inviteToken)
+        .is('accepted_at', null)
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle();
+
+      if (inviteErr || !invitation) {
+        throw new Error('Invitation invalide ou expirée');
+      }
+
+      // Créer le membership
+      const { error: memberErr } = await supabase
+        .from('organization_members')
+        .insert({
+          organization_id: invitation.organization_id,
+          user_id: userId,
+          role: invitation.role,
+          invited_by: invitation.invited_by,
+        });
+
+      if (memberErr) throw memberErr;
+
+      // Marquer l'invitation comme acceptée
+      await supabase
+        .from('invitations')
+        .update({ accepted_at: new Date().toISOString() })
+        .eq('id', invitation.id);
+
+    } else if (organizationName) {
+      // Créer une nouvelle organisation
+      const slug = organizationName
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        + '-' + Date.now().toString(36);
+
+      const { data: org, error: orgErr } = await supabase
+        .from('organizations')
+        .insert({ name: organizationName, slug })
+        .select()
+        .single();
+
+      if (orgErr) throw orgErr;
+
+      // Créer le membership owner
+      const { error: memberErr } = await supabase
+        .from('organization_members')
+        .insert({
+          organization_id: org.id,
+          user_id: userId,
+          role: 'owner',
+        });
+
+      if (memberErr) throw memberErr;
+
+      // Créer l'entrée companies liée à l'organisation
+      await supabase
+        .from('companies')
+        .insert({
+          organization_id: org.id,
+          user_id: userId,
+          name: organizationName,
+        });
+    }
+
+    // Enregistrer le consentement RGPD
+    await supabase
+      .from('consent_logs')
+      .insert({
+        user_id: userId,
+        consent_type: 'data_processing',
+        granted: true,
+        user_agent: navigator.userAgent,
+      });
+
+    await supabase
+      .from('consent_logs')
+      .insert({
+        user_id: userId,
+        consent_type: 'terms_of_service',
+        granted: true,
+        user_agent: navigator.userAgent,
+      });
   };
 
   const signOut = async () => {
@@ -242,7 +425,9 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null;
     session.value = null;
     userRole.value = 'user';
-    // Le broadcast se fait automatiquement via onAuthStateChange
+    currentOrganization.value = null;
+    organizationRole.value = null;
+    organizations.value = [];
     router.push('/login');
   };
 
@@ -301,11 +486,15 @@ export const useAuthStore = defineStore('auth', () => {
         session.value = data.session;
         user.value = data.session.user;
         await fetchUserRole(data.session.user.id);
+        await fetchUserOrganizations(data.session.user.id);
       } else if (session.value) {
         // Session expirée
         user.value = null;
         session.value = null;
         userRole.value = 'user';
+        currentOrganization.value = null;
+        organizationRole.value = null;
+        organizations.value = [];
         router.push('/login');
       }
     } catch (err) {
@@ -313,12 +502,28 @@ export const useAuthStore = defineStore('auth', () => {
     }
   };
 
+  // Changer d'organisation et notifier les autres onglets
+  const switchOrganization = async (orgId) => {
+    await setCurrentOrganization(orgId);
+    broadcastAuthEvent('ORG_CHANGED', { orgId });
+  };
+
   return {
+    // State
     user,
     session,
     initialized,
     userRole,
+    // Multi-tenant
+    currentOrganization,
+    organizationRole,
+    organizations,
+    // Computed
     isAdmin,
+    isSuperAdmin,
+    isOrgOwner,
+    isOrgAdmin,
+    // Actions
     initializeAuth,
     waitForInit,
     cleanup,
@@ -329,11 +534,14 @@ export const useAuthStore = defineStore('auth', () => {
     verifyCurrentPassword,
     updateUserPassword,
     updateProfile,
-    refreshSession
+    refreshSession,
+    switchOrganization,
+    setCurrentOrganization,
+    fetchUserOrganizations,
   };
 }, {
   persist: {
     key: 'certiwize-auth',
-    pick: ['userRole'], // Ne persister que le rôle, pas la session (gérée par Supabase)
+    pick: ['userRole', 'currentOrganization', 'organizationRole'],
   }
 });

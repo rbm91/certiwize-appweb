@@ -1,176 +1,311 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useDataStore } from '../../stores/data';
-import { useTrainingStore } from '../../stores/training';
-import { storeToRefs } from 'pinia';
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
-import { supabase } from '../../supabase';
+import { usePrestationsStore } from '../../stores/prestations';
+import { useFacturationStore } from '../../stores/facturation';
+import { useQualiteStore } from '../../stores/qualite';
+import { useEvaluationsStore } from '../../stores/evaluations';
 import Button from 'primevue/button';
-import SlowLoadingDialog from '../../components/dashboard/SlowLoadingDialog.vue';
 
+const router = useRouter();
 const authStore = useAuthStore();
-const dataStore = useDataStore();
-const trainingStore = useTrainingStore();
-const { stats, loading } = storeToRefs(dataStore);
-const { formations } = storeToRefs(trainingStore);
+const prestationsStore = usePrestationsStore();
+const facturationStore = useFacturationStore();
+const qualiteStore = useQualiteStore();
+const evaluationsStore = useEvaluationsStore();
 
-// Projets réels
-const projects = ref([]);
-const projectsLoading = ref(true);
+const loading = ref(true);
 
-// Stats calculées
-const totalFormations = computed(() => formations.value.length);
-const totalProjects = computed(() => projects.value.length);
+// ── Zone 1 : Production ──
+const sessionsEnCours = computed(() =>
+  prestationsStore.formations.filter(f => f.statut === 'en_cours').length
+);
+const missionsEnCours = computed(() => {
+  const coaching = prestationsStore.coachings.filter(c => c.statut === 'en_cours').length;
+  const conseil = prestationsStore.conseils.filter(c => c.statut === 'en_cours').length;
+  return coaching + conseil;
+});
+const evaluationsAEnvoyer = computed(() =>
+  evaluationsStore.executionsAEnvoyer.length
+);
 
-// Charger les projets avec filtre par rôle
-const fetchProjects = async () => {
-    if (!authStore.user?.id) {
-        projectsLoading.value = false;
-        return;
-    }
+// ── Zone 2 : Financier ──
+const totalEnAttente = computed(() => facturationStore.totalEnAttente);
+const totalEnRetard = computed(() => facturationStore.totalEnRetard);
+const nbFacturesEnRetard = computed(() => facturationStore.facturesEnRetard.length);
 
-    projectsLoading.value = true;
-    try {
-        const checkAdmin = authStore.userRole === 'admin';
-
-        let query = supabase
-            .from('projects')
-            .select('*')
-            .order('updated_at', { ascending: false });
-
-        if (!checkAdmin) {
-            query = query.eq('user_id', authStore.user.id);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-        projects.value = data || [];
-    } catch (e) {
-        // Erreur silencieuse
-    } finally {
-        projectsLoading.value = false;
-    }
+const formatEUR = (val) => {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(val || 0);
 };
 
+// ── Zone 3 : Qualite ──
+const signauxOuverts = computed(() => qualiteStore.signauxOuverts.length);
+const signauxEnAnalyse = computed(() => qualiteStore.signauxEnAnalyse.length);
+const hasOpenSignals = computed(() => signauxOuverts.value > 0 || signauxEnAnalyse.value > 0);
 
+// ── Zone 4 : Relation entrante ──
+const appelsATraiter = ref(0);
 
-const showSlowLoading = ref(false);
-
-onMounted(() => {
-    // Timer pour afficher la popup après 3s si toujours en chargement
-    loading.value = true;
-    showSlowLoading.value = false;
-    
-    const slowTimer = setTimeout(() => {
-        if (loading.value || projectsLoading.value) { // Check both
-            showSlowLoading.value = true;
-        }
-    }, 10000);
-
-    // Note: The individual fetches will eventually set their loading states to false
-    // We ideally should have a global loading state or wait for promises, but 
-    // since fetches are async fired in onMounted, we just let the timer run.
-    // A better approach is to wrap them:
-    Promise.all([
-        dataStore.tiers.length === 0 ? dataStore.fetchTiers() : Promise.resolve(),
-        trainingStore.fetchFormations(),
-        fetchProjects()
-    ]).finally(() => {
-        clearTimeout(slowTimer);
-        showSlowLoading.value = false;
-    });
+// ── Chargement ──
+onMounted(async () => {
+  loading.value = true;
+  try {
+    await Promise.all([
+      prestationsStore.fetchPrestations(),
+      facturationStore.fetchFactures(),
+      qualiteStore.fetchSignaux(),
+      evaluationsStore.fetchExecutions(),
+    ]);
+  } catch (e) {
+    console.error('[DashboardHome] Erreur chargement:', e);
+  } finally {
+    loading.value = false;
+  }
 });
 </script>
 
 <template>
-    <div class="space-y-8">
-        <SlowLoadingDialog :visible="showSlowLoading" />
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-                {{ $t('dashboard.hello') }}, {{ authStore.user?.user_metadata?.full_name || 'Utilisateur' }} 👋
-            </h1>
-            <p class="text-gray-500 dark:text-gray-400">{{ $t('dashboard.status_today') }}</p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border-l-4 border-primary">
-                <div class="text-gray-500 mb-1 text-sm font-medium">{{ $t('dashboard.total_clients') }}</div>
-                <div class="text-3xl font-bold" v-if="!loading">{{ stats.totalTiers }}</div>
-                <div class="text-3xl font-bold animate-pulse" v-else>...</div>
-            </div>
-            
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
-                <div class="text-gray-500 mb-1 text-sm font-medium">{{ $t('dashboard.active_formations') }}</div>
-                <div class="text-3xl font-bold" v-if="!trainingStore.loading">{{ totalFormations }}</div>
-                <div class="text-3xl font-bold animate-pulse" v-else>...</div>
-            </div>
-
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border-l-4 border-orange-500">
-                <div class="text-gray-500 mb-1 text-sm font-medium">{{ $t('dashboard.active_projects') }}</div>
-                <div class="text-3xl font-bold" v-if="!projectsLoading">{{ totalProjects }}</div>
-                <div class="text-3xl font-bold animate-pulse" v-else>...</div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-            <!-- Derniers Tiers -->
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
-                <h3 class="font-bold text-gray-800 dark:text-gray-100 mb-4 border-b pb-2">{{ $t('dashboard.recent_clients') }}</h3>
-                <ul class="space-y-3" v-if="!loading">
-                    <li v-for="tier in dataStore.tiers.slice(0, 3)" :key="tier.id" class="flex justify-between items-center text-sm">
-                        <span class="font-medium text-gray-700 dark:text-gray-300">{{ tier.name }}</span>
-                        <span class="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{{ tier.state }}</span>
-                    </li>
-                    <li v-if="dataStore.tiers.length === 0" class="text-gray-400 text-sm italic">{{ $t('dashboard.no_clients') }}</li>
-                </ul>
-                <div v-else class="text-sm text-gray-400">{{ $t('dashboard.loading') }}</div>
-            </div>
-
-            <!-- Dernières Formations -->
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
-                <h3 class="font-bold text-gray-800 dark:text-gray-100 mb-4 border-b pb-2">{{ $t('dashboard.recent_formations') }}</h3>
-                <ul class="space-y-3" v-if="!trainingStore.loading">
-                    <li v-for="formation in formations.slice(0, 3)" :key="formation.id" class="flex justify-between items-center text-sm">
-                        <span class="font-medium text-gray-700 dark:text-gray-300">{{ formation.title }}</span>
-                        <span class="text-xs text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded">
-                            {{ new Date(formation.updated_at).toLocaleDateString('fr-FR') }}
-                        </span>
-                    </li>
-                    <li v-if="formations.length === 0" class="text-gray-400 text-sm italic">{{ $t('dashboard.no_formations') }}</li>
-                </ul>
-                <div v-else class="text-sm text-gray-400">{{ $t('dashboard.loading') }}</div>
-            </div>
-
-            <!-- Derniers Projets -->
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
-                <h3 class="font-bold text-gray-800 dark:text-gray-100 mb-4 border-b pb-2">{{ $t('dashboard.recent_projects') }}</h3>
-                <ul class="space-y-3" v-if="!projectsLoading">
-                    <li v-for="project in projects.slice(0, 3)" :key="project.id" class="flex justify-between items-center text-sm">
-                        <span class="font-medium text-gray-700 dark:text-gray-300">{{ project.name }}</span>
-                        <span class="text-xs text-orange-600 bg-orange-50 dark:bg-orange-900/30 px-2 py-1 rounded">{{ project.status || $t('dashboard.status_draft') }}</span>
-                    </li>
-                    <li v-if="projects.length === 0" class="text-gray-400 text-sm italic">{{ $t('dashboard.no_projects') }}</li>
-                </ul>
-                <div v-else class="text-sm text-gray-400">{{ $t('dashboard.loading') }}</div>
-            </div>
-        </div>
-
-        <div class="bg-blue-50 dark:bg-gray-800/50 p-6 rounded-xl border border-blue-100 dark:border-gray-700">
-            <h3 class="font-bold mb-4">{{ $t('dashboard.quick_actions') }}</h3>
-            <div class="flex flex-wrap gap-3">
-                <router-link to="/dashboard/tiers/create">
-                    <Button :label="$t('dashboard.btn_new_client')" icon="pi pi-user-plus" />
-                </router-link>
-                <router-link to="/dashboard/catalogue/create">
-                    <Button :label="$t('dashboard.btn_new_formation')" icon="pi pi-book" />
-                </router-link>
-                <router-link to="/dashboard/projets/create">
-                    <Button :label="$t('dashboard.btn_new_project')" icon="pi pi-plus" />
-                </router-link>
-                <router-link to="/dashboard/learners/create">
-                    <Button :label="$t('dashboard.btn_new_learner')" icon="pi pi-graduation-cap" />
-                </router-link>
-            </div>
-        </div>
+  <div class="space-y-8">
+    <!-- En-tête -->
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+        Bonjour, {{ authStore.user?.user_metadata?.full_name || 'Utilisateur' }}
+      </h1>
+      <p class="text-gray-500 dark:text-gray-400 mt-1">
+        Voici votre tableau de pilotage.
+      </p>
     </div>
+
+    <!-- Grille 2x2 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- ═══ Zone 1 — Production (bleu) ═══ -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-l-4 border-blue-500 p-6">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center">
+            <i class="pi pi-briefcase text-blue-500 text-lg"></i>
+          </div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Production</h2>
+        </div>
+
+        <div v-if="loading" class="space-y-3">
+          <div class="h-6 bg-gray-100 dark:bg-gray-700 rounded animate-pulse"></div>
+          <div class="h-6 bg-gray-100 dark:bg-gray-700 rounded animate-pulse"></div>
+        </div>
+
+        <div v-else class="space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">Sessions en cours</span>
+            <span class="text-2xl font-bold text-blue-600">{{ sessionsEnCours }}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">Missions en cours</span>
+            <span class="text-2xl font-bold text-blue-600">{{ missionsEnCours }}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">Évaluations à envoyer</span>
+            <span class="text-2xl font-bold text-blue-600">{{ evaluationsAEnvoyer }}</span>
+          </div>
+        </div>
+
+        <div class="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <Button
+            label="Voir prestations"
+            icon="pi pi-arrow-right"
+            iconPos="right"
+            severity="info"
+            text
+            size="small"
+            @click="router.push('/dashboard/prestations')"
+          />
+        </div>
+      </div>
+
+      <!-- ═══ Zone 2 — Financier (vert) ═══ -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-l-4 border-green-500 p-6">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center">
+            <i class="pi pi-wallet text-green-500 text-lg"></i>
+          </div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Financier</h2>
+        </div>
+
+        <div v-if="loading" class="space-y-3">
+          <div class="h-6 bg-gray-100 dark:bg-gray-700 rounded animate-pulse"></div>
+          <div class="h-6 bg-gray-100 dark:bg-gray-700 rounded animate-pulse"></div>
+        </div>
+
+        <div v-else class="space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">Total en attente</span>
+            <span class="text-2xl font-bold text-green-600">{{ formatEUR(totalEnAttente) }}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">Total en retard</span>
+            <span class="text-2xl font-bold text-red-600">{{ formatEUR(totalEnRetard) }}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">Factures en retard</span>
+            <span class="text-2xl font-bold" :class="nbFacturesEnRetard > 0 ? 'text-red-600' : 'text-green-600'">
+              {{ nbFacturesEnRetard }}
+            </span>
+          </div>
+        </div>
+
+        <div class="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <Button
+            label="Voir facturation"
+            icon="pi pi-arrow-right"
+            iconPos="right"
+            severity="success"
+            text
+            size="small"
+            @click="router.push('/dashboard/factures')"
+          />
+        </div>
+      </div>
+
+      <!-- ═══ Zone 3 — Qualité (violet) ═══ -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-l-4 border-purple-500 p-6">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 bg-purple-500/10 rounded-full flex items-center justify-center">
+            <i class="pi pi-shield text-purple-500 text-lg"></i>
+          </div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Qualité</h2>
+        </div>
+
+        <div v-if="loading" class="space-y-3">
+          <div class="h-6 bg-gray-100 dark:bg-gray-700 rounded animate-pulse"></div>
+          <div class="h-6 bg-gray-100 dark:bg-gray-700 rounded animate-pulse"></div>
+        </div>
+
+        <div v-else class="space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">Signaux ouverts</span>
+            <span class="text-2xl font-bold" :class="signauxOuverts > 0 ? 'text-red-600' : 'text-purple-600'">
+              {{ signauxOuverts }}
+            </span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">Signaux en analyse</span>
+            <span class="text-2xl font-bold text-purple-600">{{ signauxEnAnalyse }}</span>
+          </div>
+          <div v-if="hasOpenSignals" class="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs px-3 py-2 rounded-lg">
+            Des sessions peuvent être bloquées tant que des signaux restent ouverts.
+          </div>
+        </div>
+
+        <div class="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <Button
+            label="Voir qualité"
+            icon="pi pi-arrow-right"
+            iconPos="right"
+            text
+            size="small"
+            class="!text-purple-600"
+            @click="router.push('/dashboard/qualite')"
+          />
+        </div>
+      </div>
+
+      <!-- ═══ Zone 4 — Contact entrant (orange) ═══ -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-l-4 border-orange-500 p-6">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 bg-orange-500/10 rounded-full flex items-center justify-center">
+            <i class="pi pi-phone text-orange-500 text-lg"></i>
+          </div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Contact entrant</h2>
+        </div>
+
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">Appels à traiter</span>
+            <span class="text-2xl font-bold text-orange-600">{{ appelsATraiter }}</span>
+          </div>
+          <p class="text-xs text-gray-400 dark:text-gray-500 italic">
+            Connectez votre assistant IA pour qualifier automatiquement les appels entrants.
+          </p>
+        </div>
+
+        <div class="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <Button
+            label="Assistant IA"
+            icon="pi pi-arrow-right"
+            iconPos="right"
+            severity="warn"
+            text
+            size="small"
+            @click="router.push('/dashboard/assistant-ia')"
+          />
+        </div>
+      </div>
+
+      <!-- ═══ Zone 5 — Générer votre BPF (indigo) ═══ -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-l-4 border-indigo-500 p-6">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 bg-indigo-500/10 rounded-full flex items-center justify-center">
+            <i class="pi pi-file-export text-indigo-500 text-lg"></i>
+          </div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Bilan pédagogique et Financier</h2>
+        </div>
+
+        <div class="space-y-4">
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            Générez automatiquement votre BPF annuel à partir des données de vos prestations, sessions et factures enregistrées dans CertiWize.
+          </p>
+          <div class="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 text-xs px-3 py-2 rounded-lg flex items-center gap-2">
+            <i class="pi pi-info-circle"></i>
+            Obligation annuelle pour tout organisme de formation déclaré.
+          </div>
+        </div>
+
+        <div class="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <Button
+            label="Générer votre BPF"
+            icon="pi pi-file-export"
+            iconPos="right"
+            text
+            size="small"
+            class="!text-indigo-600"
+            @click="router.push('/dashboard/bpf')"
+          />
+        </div>
+      </div>
+
+      <!-- ═══ Zone 6 — Audit blanc (rose) ═══ -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-l-4 border-pink-500 p-6">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 bg-pink-500/10 rounded-full flex items-center justify-center">
+            <i class="pi pi-search text-pink-500 text-lg"></i>
+          </div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Audit blanc Qualiopi</h2>
+        </div>
+
+        <div class="space-y-4">
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            Préparez votre audit Qualiopi grâce à notre outil de modélisation. Identifiez les écarts et anticipez les points de vigilance avant le jour J.
+          </p>
+          <div class="bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-300 text-xs px-3 py-2 rounded-lg flex items-center gap-2">
+            <i class="pi pi-external-link"></i>
+            Outil externe — s'ouvre dans un nouvel onglet.
+          </div>
+        </div>
+
+        <div class="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <a href="https://qualiopi.genedoc.fr/" target="_blank" rel="noopener noreferrer">
+            <Button
+              label="Lancer l'audit blanc"
+              icon="pi pi-external-link"
+              iconPos="right"
+              text
+              size="small"
+              class="!text-pink-600"
+            />
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
 </template>

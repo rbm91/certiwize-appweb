@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useTrainingStore } from '../../stores/training';
+import { useAuthStore } from '../../stores/auth';
 import { supabase } from '../../supabase';
 import { useI18n } from 'vue-i18n';
 
@@ -12,12 +13,23 @@ import InputNumber from 'primevue/inputnumber';
 import Button from 'primevue/button';
 import Calendar from 'primevue/calendar';
 import Message from 'primevue/message';
+import Dropdown from 'primevue/dropdown';
 import ProgressBar from 'primevue/progressbar';
 import { useConfirm } from 'primevue/useconfirm';
+import { useFormValidation } from '../../composables/useFormValidation';
+
+// Options pour le dropdown modalités
+const modalitesOptions = [
+    { label: 'Présentiel', value: 'presentiel' },
+    { label: 'Distanciel', value: 'distanciel' },
+    { label: 'Mixte', value: 'mixte' }
+];
 
 const confirm = useConfirm();
 const route = useRoute();
 const trainingStore = useTrainingStore();
+const authStore = useAuthStore();
+const { errors, validate, clearError } = useFormValidation();
 const { t } = useI18n();
 
 // État
@@ -77,7 +89,16 @@ Workshop 1 :
 `,
 
     moyens_pedagq: '',
-    modalités_eval: ''
+    modalités_eval: '',
+
+    // CDC fields
+    public_cible: '',
+    objectifs_pedagogiques: '',
+    programme: '',
+    moyens_pedagogiques: '',
+    modalites_evaluation: '',
+    accessibilite: '',
+    modalites: null
 });
 
 // Watcher pour générer automatiquement le format horaires
@@ -98,11 +119,13 @@ watch([() => form.value.horaires_debut, () => form.value.horaires_fin], () => {
 onMounted(async () => {
     if (trainingId.value) {
         try {
-            const { data, error } = await supabase
+            const orgId = authStore?.currentOrganization?.id;
+            let loadQuery = supabase
                 .from('formations')
                 .select('*')
-                .eq('id', trainingId.value)
-                .single();
+                .eq('id', trainingId.value);
+            if (orgId) loadQuery = loadQuery.eq('organization_id', orgId);
+            const { data, error } = await loadQuery.single();
 
             if (error) throw error;
             
@@ -145,6 +168,9 @@ onMounted(async () => {
 
 // Actions - Génération avec polling optimisé et barre de progression
 const handleGenerate = async () => {
+    const isValid = validate({ titre: form.value.titre });
+    if (!isValid) return;
+
     submitting.value = true;
     progressValue.value = 0;
     progressTime.value = 0;
@@ -354,7 +380,7 @@ const goBack = () => {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="md:col-span-2">
                         <label class="font-semibold block mb-2">{{ t('training.fields.title') }}</label>
-                        <InputText v-model="form.titre" class="w-full text-lg" :placeholder="t('training.placeholders.title')" required />
+                        <InputText v-model="form.titre" class="w-full text-lg" :placeholder="t('training.placeholders.title')" :invalid="!!errors.titre" @input="clearError('titre')" />
                     </div>
                     <div>
                         <label class="block mb-2">{{ t('training.fields.updated_at') }}</label>
@@ -445,6 +471,46 @@ const goBack = () => {
                     <div class="md:col-span-2">
                         <label class="font-semibold block mb-2">{{ t('training.fields.handicap_referent') }}</label>
                         <Textarea v-model="form.ref_handi" rows="2" class="w-full" />
+                    </div>
+                </div>
+
+                <!-- ================================================ -->
+                <!-- Section CDC — Cahier des charges (bordure bleue) -->
+                <!-- ================================================ -->
+                <div class="border-l-4 border-blue-500 pl-6 py-4 space-y-6 bg-blue-50/40 dark:bg-blue-900/10 rounded-r-lg">
+                    <h2 class="text-lg font-bold text-blue-700 dark:text-blue-300 mb-2">Cahier des charges (CDC)</h2>
+
+                    <div>
+                        <label class="font-semibold block mb-2">Public visé</label>
+                        <Textarea v-model="form.public_cible" rows="3" class="w-full" placeholder="Décrivez le public cible de la formation" />
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-2">Prérequis</label>
+                        <Textarea v-model="form.prerequis" rows="3" class="w-full" placeholder="Prérequis nécessaires pour suivre la formation" />
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-2">Objectifs pédagogiques</label>
+                        <Textarea v-model="form.objectifs_pedagogiques" rows="4" class="w-full" placeholder="Listez les objectifs pédagogiques" />
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-2">Programme détaillé</label>
+                        <Textarea v-model="form.programme" rows="6" class="w-full" placeholder="Décrivez le programme détaillé de la formation" />
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-2">Moyens pédagogiques et techniques</label>
+                        <Textarea v-model="form.moyens_pedagogiques" rows="3" class="w-full" placeholder="Moyens pédagogiques et techniques mis en oeuvre" />
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-2">Modalités d'évaluation</label>
+                        <Textarea v-model="form.modalites_evaluation" rows="3" class="w-full" placeholder="Décrivez les modalités d'évaluation" />
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-2">Accessibilité aux personnes en situation de handicap</label>
+                        <Textarea v-model="form.accessibilite" rows="3" class="w-full" placeholder="Indiquez les dispositions d'accessibilité" />
+                    </div>
+                    <div class="max-w-sm">
+                        <label class="font-semibold block mb-2">Modalités</label>
+                        <Dropdown v-model="form.modalites" :options="modalitesOptions" optionLabel="label" optionValue="value" placeholder="Choisir une modalité" class="w-full" />
                     </div>
                 </div>
 

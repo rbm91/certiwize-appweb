@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Message from 'primevue/message';
+import { useFormValidation } from '../composables/useFormValidation';
 
 const { t } = useI18n();
 const auth = useAuthStore();
@@ -12,7 +13,12 @@ const email = ref('');
 const loading = ref(false);
 const msg = ref({ type: '', content: '' });
 
+const { errors, validate, clearError } = useFormValidation();
+
 const handleReset = async () => {
+  const isValid = validate({ email: email.value });
+  if (!isValid) return;
+
   loading.value = true;
   msg.value = { type: '', content: '' };
   try {
@@ -33,7 +39,7 @@ const handleReset = async () => {
       <form @submit.prevent="handleReset" class="space-y-4">
         <div class="flex flex-col gap-2">
           <label class="text-gray-700 dark:text-gray-300">{{ t('forgot_password.email') }}</label>
-          <InputText v-model="email" type="email" required class="w-full" />
+          <InputText v-model="email" type="email" class="w-full" :invalid="!!errors.email" @input="clearError('email')" />
         </div>
         <Message v-if="msg.content" :severity="msg.type" :closable="false">{{ msg.content }}</Message>
         <Button type="submit" :label="t('forgot_password.submit')" :loading="loading" class="w-full" />

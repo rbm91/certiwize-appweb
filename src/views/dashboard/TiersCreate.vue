@@ -1,376 +1,680 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useDataStore } from '../../stores/data';
-import { useRoute } from 'vue-router';
-// Supabase import retiré car plus besoin de charger la liste des utilisateurs
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useTiersStore } from '../../stores/tiers';
+import { useSirenLookup } from '../../composables/useSirenLookup';
+import { useConformityScore } from '../../composables/useConformityScore';
+import { useFileUpload } from '../../composables/useFileUpload';
+import { useNotification } from '../../composables/useNotification';
+import { useFormValidation } from '../../composables/useFormValidation';
+import ScoreBadge from '../../components/dashboard/ScoreBadge.vue';
+import AddressAutocomplete from '../../components/common/AddressAutocomplete.vue';
+import {
+  TIER_ROLE_OPTIONS, TIER_NATURES, TIER_STATUTS,
+  STATUT_COMMERCIAL, FOURNISSEUR_TYPES, HANDICAP_OPTIONS,
+  TIER_DOC_TYPES, RELATION_TYPES,
+} from '../../config/constants';
 
-// Imports PrimeVue
+// PrimeVue components
 import InputText from 'primevue/inputtext';
+import InputMask from 'primevue/inputmask';
 import Textarea from 'primevue/textarea';
 import Button from 'primevue/button';
 import Dropdown from 'primevue/dropdown';
 import Checkbox from 'primevue/checkbox';
 import InputNumber from 'primevue/inputnumber';
 import FileUpload from 'primevue/fileupload';
-// MultiSelect retiré
 import Message from 'primevue/message';
-import Accordion from 'primevue/accordion';
-import AccordionPanel from 'primevue/accordionpanel';
-import AccordionHeader from 'primevue/accordionheader';
-import AccordionContent from 'primevue/accordioncontent';
+import Tag from 'primevue/tag';
+import ToggleSwitch from 'primevue/toggleswitch';
+import DatePicker from 'primevue/datepicker';
+import Divider from 'primevue/divider';
+import MultiSelect from 'primevue/multiselect';
 import Chips from 'primevue/chips';
 
 const route = useRoute();
-const dataStore = useDataStore();
+const router = useRouter();
+const store = useTiersStore();
+const { lookup, loading: sirenLoading } = useSirenLookup();
+const { computeScore } = useConformityScore();
+const { uploading: fileUploading, uploadFile } = useFileUpload('tier-files');
+const { showSuccess, showError } = useNotification();
 
-// --- Données du formulaire ---
-// ... (rest of form definition)
+// --- Pré-sélection via query param (avant le premier rendu) ---
+const ROLES_PERSONNE = ['apprenant', 'formateur'];
+const preselectedRole = !route.params.id && route.query.role ? route.query.role : null;
+const initialNature = preselectedRole && ROLES_PERSONNE.includes(preselectedRole)
+  ? 'personne_physique'
+  : 'organisation';
 
-// ...
-
-// --- Actions ---
-
+// --- Form state ---
 const form = ref({
-    // 1 & 2. Identité
-    name: '',
-    alt_name: '',
-    tier_type: [],
-    code_client: '',
-    code_fournisseur: '',
-    state: 'Ouvert',
-    barcode: '',
-    is_trainer: false, // Ajout champ Formateur
-    is_opco: false,    // Ajout champ OPCO
-    
-    // 3. Coordonnées
-    address: '',
-    zip_code: '',
-    city: '',
-    country: 'FR',
-    department: null,
-    phone: '',
-    mobile: '',
-    fax: '',
-    website: '',
-    email: '',
-    refuse_mass_mail: false,
-    show_socials: false,
+  nature: initialNature,
+  nom_affiche: '',
+  email: '',
+  telephone: '',
+  address: '',
+  city: '',
+  zip_code: '',
+  country: 'France',
+  notes: '',
+  tags: [],
+  statut: 'actif',
+  statut_commercial: '',
+  site_web: '',
 
-    // 4. Infos légales
-    siren: '',
-    siret: '',
-    naf_ape: '',
-    rcs_rm: '',
-    eori_number: '',
-    rna_number: '',
-    tva_subject: false,
-    tva_number: '',
-    legal_entity_type: null,
-    workforce: 0,
-    capital: 0,
+  // Organisation
+  raison_sociale: '',
+  siren: '',
+  siret: '',
+  naf_ape: '',
+  tva_intracom: '',
 
-    // 5. Paramètres
-    default_lang: 'Français',
-    payment_conditions: null,
-    payment_mode: null,
-    tags_client: [], 
-    tags_supplier: [],
-    currency: 'EUR',
+  // Personne physique
+  prenom: '',
+  nom_famille: '',
 
-    // 6. Ressources
-    assigned_to: ''
+  // Apprenant
+  date_naissance: null,
+  niveau_entree: '',
+  objectif_professionnel: '',
+  situation_handicap: 'non_renseigne',
+  besoin_amenagement: '',
+
+  // Formateur
+  nda_signe: false,
+  nda_date_signature: null,
+  nda_document_url: '',
+  declaration_activite: '',
+  declaration_region: '',
+  qualiopi_certifie: false,
+  qualiopi_certificateur: '',
+  qualiopi_date_validite: null,
+  qualiopi_certificat_url: '',
+
+  // Fournisseur
+  fournisseur_type: '',
+  accord_cadre_signe: false,
+  accord_cadre_url: '',
 });
 
-// --- Actions ---
-
-const isEditing = ref(false);
-const tierId = ref(null);
-
-onMounted(async () => {
-    if (route.params.id) {
-        isEditing.value = true;
-        tierId.value = route.params.id;
-
-        const tier = await dataStore.getTierById(tierId.value);
-        if (tier) {
-            form.value = {
-                ...form.value,
-                ...tier,
-                tier_type: tier.tier_type || [],
-                tags_client: tier.tags_client || [],
-                tags_supplier: tier.tags_supplier || []
-            };
-        } else {
-            errorMsg.value = "Impossible de charger les données du tiers (ID non trouvé).";
-        }
-    }
-});
-
-
-// --- Options des listes ---
-const typeOptions = ['Prospect', 'Client', 'Fournisseur'];
-const stateOptions = ['Ouvert', 'Fermé', 'En sommeil'];
-const countryOptions = [{label: 'France (FR)', value: 'FR'}, {label: 'Belgique (BE)', value: 'BE'}];
-const deptOptions = ['75 - Paris', '91 - Essonne', '92 - Hauts-de-Seine', '33 - Gironde', '69 - Rhône']; 
-const yesNoOptions = [{ label: 'Oui', value: true }, { label: 'Non', value: false }];
-const legalEntities = ['SAS', 'SARL', 'EURL', 'Auto-entrepreneur', 'SA', 'SCI'];
-const langOptions = ['Français', 'Anglais', 'Espagnol'];
-const payConditions = ['30 jours fin de mois', 'Comptant', '45 jours', '60 jours'];
-const payModes = ['Virement', 'Chèque', 'Prélèvement', 'Carte Bancaire'];
-const currencyOptions = [{label: 'Euros (€)', value: 'EUR'}, {label: 'Dollars ($)', value: 'USD'}];
-
+const selectedRoles = ref(preselectedRole ? [preselectedRole] : []);
 const submitting = ref(false);
 const errorMsg = ref('');
+const { errors, validate, clearError } = useFormValidation();
 
-// Validation du formulaire
-const isFormValid = computed(() => {
-    return form.value.name?.trim() !== '';
+// --- Computed ---
+const isEditMode = computed(() => !!route.params.id);
+
+const ROLE_LABELS = {
+  apprenant: 'Nouvel apprenant',
+  formateur: 'Nouveau formateur',
+  client: 'Nouveau client',
+  fournisseur: 'Nouveau fournisseur',
+};
+
+const pageTitle = computed(() => {
+  if (isEditMode.value) return 'Modifier le tiers';
+  if (preselectedRole && ROLE_LABELS[preselectedRole]) return ROLE_LABELS[preselectedRole];
+  return 'Nouveau tiers';
 });
 
-// --- Actions ---
+const isOrganisation = computed(() => form.value.nature === 'organisation');
+const isPersonne = computed(() => form.value.nature === 'personne_physique');
+const forcePersonne = computed(() => selectedRoles.value.includes('apprenant') || selectedRoles.value.includes('formateur'));
 
+const hasRole = (role) => selectedRoles.value.includes(role);
 
+const computedScore = computed(() =>
+  computeScore(form.value, selectedRoles.value, [])
+);
 
+// --- Auto-compute nom_affiche ---
+watch(
+  () => [form.value.nature, form.value.prenom, form.value.nom_famille, form.value.raison_sociale],
+  () => {
+    if (isPersonne.value) {
+      form.value.nom_affiche = `${form.value.prenom} ${form.value.nom_famille}`.trim();
+    } else {
+      form.value.nom_affiche = form.value.raison_sociale;
+    }
+  }
+);
+
+// --- Force nature personne_physique pour apprenant/formateur ---
+watch(
+  () => selectedRoles.value,
+  (roles) => {
+    if (roles.includes('apprenant') || roles.includes('formateur')) {
+      form.value.nature = 'personne_physique';
+    }
+  },
+  { deep: true }
+);
+
+// --- Reset irrelevant fields on nature change ---
+watch(
+  () => form.value.nature,
+  (newNature) => {
+    if (newNature === 'personne_physique') {
+      form.value.raison_sociale = '';
+      form.value.siren = '';
+      form.value.siret = '';
+      form.value.naf_ape = '';
+      form.value.tva_intracom = '';
+    } else {
+      form.value.prenom = '';
+      form.value.nom_famille = '';
+    }
+  }
+);
+
+// --- SIREN auto-fill ---
+watch(
+  () => form.value.siren,
+  async (siren) => {
+    if (!siren) return;
+    const clean = siren.replace(/\D/g, '');
+    if (clean.length === 9) {
+      const result = await lookup(clean);
+      if (result) {
+        form.value.raison_sociale = result.raison_sociale || form.value.raison_sociale;
+        form.value.siret = result.siret || form.value.siret;
+        form.value.naf_ape = result.naf_ape || form.value.naf_ape;
+        form.value.address = result.adresse || form.value.address;
+        form.value.zip_code = result.cp || form.value.zip_code;
+        form.value.city = result.ville || form.value.city;
+      }
+    }
+  }
+);
+
+// --- Address autocomplete handler ---
+const handleAddressSelected = (addressData) => {
+  if (addressData.street) form.value.address = addressData.street;
+  if (addressData.postcode) form.value.zip_code = addressData.postcode;
+  if (addressData.city) form.value.city = addressData.city;
+};
+
+// --- File upload handler ---
+const onFileUpload = async (event, field) => {
+  const result = await uploadFile(event, field);
+  if (result.url) {
+    form.value[field] = result.url;
+  }
+};
+
+// --- Submit ---
 const handleSubmit = async () => {
-    submitting.value = true;
-    errorMsg.value = '';
+  const rules = {};
+  if (isPersonne.value) {
+    rules.prenom = form.value.prenom;
+    rules.nom_famille = form.value.nom_famille;
+  } else if (isOrganisation.value) {
+    rules.raison_sociale = form.value.raison_sociale;
+  }
+  const isValid = validate(rules);
+  if (!isValid) return;
 
-    let result;
-    if (isEditing.value) {
-        result = await dataStore.updateTier(tierId.value, form.value);
-    } else {
-        result = await dataStore.createTier(form.value);
-    }
+  submitting.value = true;
+  errorMsg.value = '';
 
-    if (result.success) {
-        window.location.href = '/dashboard/tiers';
+  try {
+    if (isEditMode.value) {
+      const result = await store.updateTier(route.params.id, form.value, selectedRoles.value);
+
+      if (result.success) {
+        // Manage role changes
+        const existingTier = await store.getTierById(route.params.id);
+        const existingRoles = (existingTier?.tiers_roles || []).map(r => r.role);
+        const rolesToAdd = selectedRoles.value.filter(r => !existingRoles.includes(r));
+        const rolesToRemove = existingRoles.filter(r => !selectedRoles.value.includes(r));
+
+        for (const role of rolesToAdd) {
+          await store.addRole(route.params.id, role);
+        }
+        for (const role of rolesToRemove) {
+          await store.removeRole(route.params.id, role);
+        }
+
+        showSuccess('Tiers mis à jour', 'Les modifications ont été enregistrées.');
+        router.push(`/dashboard/tiers/${route.params.id}`);
+      } else {
+        errorMsg.value = result.error || 'Erreur lors de la mise à jour.';
+        showError('Erreur', errorMsg.value);
+      }
     } else {
-        errorMsg.value = "Erreur lors de l'enregistrement : " + result.error;
+      const result = await store.createTier(form.value, selectedRoles.value);
+
+      if (result.success) {
+        showSuccess('Tiers créé', 'Le tiers a été créé avec succès.');
+        router.push('/dashboard/tiers');
+      } else {
+        errorMsg.value = result.error || 'Erreur lors de la création.';
+        showError('Erreur', errorMsg.value);
+      }
     }
+  } catch (err) {
+    errorMsg.value = err.message;
+    showError('Erreur', err.message);
+  } finally {
     submitting.value = false;
-};
-
-const verifyTva = () => {
-    // TODO: Implémenter la vérification VIES API
-};
-
-const onLogoUpload = (_event) => {
-    // Fichier logo sélectionné - traitement à implémenter
+  }
 };
 
 const goBack = () => {
-    window.location.href = '/dashboard/tiers';
+  router.push('/dashboard/tiers');
 };
+
+// --- Mount: load tier in edit mode ---
+onMounted(async () => {
+  if (route.params.id) {
+    const tier = await store.getTierById(route.params.id);
+    if (tier) {
+      Object.keys(form.value).forEach(key => {
+        if (tier[key] !== undefined && tier[key] !== null) {
+          form.value[key] = tier[key];
+        }
+      });
+      // Parse dates
+      if (tier.date_naissance) form.value.date_naissance = new Date(tier.date_naissance);
+      if (tier.nda_date_signature) form.value.nda_date_signature = new Date(tier.nda_date_signature);
+      if (tier.qualiopi_date_validite) form.value.qualiopi_date_validite = new Date(tier.qualiopi_date_validite);
+      // Populate roles
+      selectedRoles.value = (tier.tiers_roles || []).map(r => r.role);
+    } else {
+      errorMsg.value = 'Impossible de charger les données du tiers.';
+    }
+  }
+  // Pré-sélection via query param déjà gérée à l'initialisation (preselectedRole)
+});
 </script>
 
 <template>
-    <div class="max-w-5xl mx-auto bg-gray-50 dark:bg-gray-900 pb-20">
-        
-        <div class="bg-white dark:bg-gray-800 p-6 shadow-sm sticky top-0 z-10 mb-6 flex justify-between items-center border-b border-gray-200 dark:border-gray-700">
-            <div class="flex items-center gap-4">
-                <Button icon="pi pi-arrow-left" text rounded @click="goBack" :aria-label="$t('tiers.cancel')" />
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ isEditing ? $t('tiers.edit_title') : $t('tiers.new_title') }}</h1>
-            </div>
-            <div class="flex gap-2">
-                <Button :label="$t('tiers.cancel')" severity="secondary" @click="goBack" />
-                <Button :label="isEditing ? $t('tiers.save_modifications') : $t('tiers.create')" icon="pi pi-check" :loading="submitting" :disabled="!isFormValid" @click="handleSubmit" />
-            </div>
-        </div>
+  <div class="max-w-5xl mx-auto pb-20">
 
-        <form @submit.prevent="handleSubmit" class="px-4 sm:px-6 space-y-6">
-            
-            <Message v-if="errorMsg" severity="error" :closable="false" class="mb-4">{{ errorMsg }}</Message>
-
-            <div class="card bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <h2 class="text-xl font-semibold mb-4 text-primary border-b pb-2">{{ $t('tiers.general.title') }}</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.general.name') }} *</label>
-                        <InputText v-model="form.name" required :placeholder="$t('tiers.general.name_placeholder')" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.general.alt_name') }}</label>
-                        <InputText v-model="form.alt_name" :placeholder="$t('tiers.general.alt_name_placeholder')" />
-                    </div>
-                    
-                    <div class="col-span-1 md:col-span-2">
-                        <label class="block mb-2 text-sm font-medium">{{ $t('tiers.general.type') }}</label>
-                        <div class="flex flex-wrap gap-4">
-                            <div v-for="type in typeOptions" :key="type" class="flex items-center">
-                                <Checkbox v-model="form.tier_type" :inputId="type" :value="type" />
-                                <label :for="type" class="ml-2 cursor-pointer select-none">{{ type }}</label>
-                            </div>
-                            <!-- Case Formateur intégrée -->
-                            <div class="flex items-center">
-                                <Checkbox v-model="form.is_trainer" :binary="true" inputId="is_trainer" />
-                                <label for="is_trainer" class="ml-2 cursor-pointer select-none text-gray-700 dark:text-gray-300">{{ $t('tiers.general.trainer') }}</label>
-                            </div>
-                            <!-- Case OPCO -->
-                            <div class="flex items-center">
-                                <Checkbox v-model="form.is_opco" :binary="true" inputId="is_opco" />
-                                <label for="is_opco" class="ml-2 cursor-pointer select-none text-gray-700 dark:text-gray-300">{{ $t('tiers.general.opco') }}</label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.general.client_code') }} (Auto)</label>
-                        <InputText v-model="form.code_client" placeholder="Généré automatiquement si vide" disabled class="bg-gray-100 opacity-70" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.general.supplier_code') }} (Auto)</label>
-                        <InputText v-model="form.code_fournisseur" placeholder="Généré automatiquement si vide" disabled class="bg-gray-100 opacity-70" />
-                    </div>
-
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.general.status') }}</label>
-                        <Dropdown v-model="form.state" :options="stateOptions" :placeholder="$t('tiers.financial.select')" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.general.barcode') }}</label>
-                        <InputText v-model="form.barcode" />
-                    </div>
-                </div>
-            </div>
-
-            <div class="card bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <h2 class="text-xl font-semibold mb-4 text-primary border-b pb-2">{{ $t('tiers.contact.title') }}</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="col-span-1 md:col-span-2 flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.contact.address') }}</label>
-                        <Textarea v-model="form.address" rows="3" autoResize placeholder="Rue, numéro, bâtiment..." />
-                    </div>
-                    
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.contact.zip') }}</label>
-                        <InputText v-model="form.zip_code" maxlength="5" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.contact.city') }}</label>
-                        <InputText v-model="form.city" />
-                    </div>
-
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.contact.country') }}</label>
-                        <Dropdown v-model="form.country" :options="countryOptions" optionLabel="label" optionValue="value" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.contact.department') }}</label>
-                        <Dropdown v-model="form.department" :options="deptOptions" :placeholder="$t('tiers.financial.select')" />
-                    </div>
-
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.contact.phone') }}</label>
-                        <InputText v-model="form.phone" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.contact.mobile') }}</label>
-                        <InputText v-model="form.mobile" />
-                    </div>
-                    
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.contact.website') }}</label>
-                        <InputText v-model="form.website" placeholder="https://" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium">{{ $t('tiers.contact.email') }}</label>
-                        <InputText v-model="form.email" type="email" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label>{{ $t('tiers.contact.refuse_mass_email') }}</label>
-                        <Dropdown v-model="form.refuse_mass_mail" :options="yesNoOptions" optionLabel="label" optionValue="value" />
-                    </div>
-                    <div class="flex items-center mt-6">
-                        <Checkbox v-model="form.show_socials" :binary="true" inputId="socials" />
-                        <label for="socials" class="ml-2 font-medium cursor-pointer">{{ $t('tiers.contact.show_socials') }}</label>
-                    </div>
-                </div>
-            </div>
-
-            <Accordion :multiple="true" :activeIndex="[0]">
-                
-                <AccordionPanel value="0">
-                    <AccordionHeader>{{ $t('tiers.legal.title') }}</AccordionHeader>
-                    <AccordionContent>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.legal.siren') }} (9 max)</label><InputText v-model="form.siren" maxlength="9" /></div>
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.legal.siret') }} (14 max)</label><InputText v-model="form.siret" maxlength="14" /></div>
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.legal.naf') }}</label><InputText v-model="form.naf_ape" maxlength="5" /></div>
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.legal.rcs') }}</label><InputText v-model="form.rcs_rm" /></div>
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.legal.eori') }}</label><InputText v-model="form.eori_number" /></div>
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.legal.rna') }}</label><InputText v-model="form.rna_number" /></div>
-                        </div>
-
-                        <div class="mt-6 border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="flex flex-col gap-2">
-                                <div class="flex items-center mb-2">
-                                    <Checkbox v-model="form.tva_subject" :binary="true" inputId="tva" />
-                                    <label for="tva" class="ml-2 cursor-pointer font-medium">{{ $t('tiers.legal.vat_subject') }}</label>
-                                </div>
-                                <div class="flex gap-2" v-if="form.tva_subject">
-                                    <InputText v-model="form.tva_number" :placeholder="$t('tiers.legal.vat_number')" class="flex-1" />
-                                    <Button :label="$t('tiers.legal.check_vat')" icon="pi pi-search" severity="info" outlined @click="verifyTva" />
-                                </div>
-                            </div>
-                            
-                            <div class="flex flex-col gap-2">
-                                <label class="text-sm font-medium">Type d'entité légale</label>
-                                <Dropdown v-model="form.legal_entity_type" :options="legalEntities" :placeholder="$t('tiers.financial.select')" />
-                            </div>
-                            <div class="flex flex-col gap-2">
-                                <label class="text-sm font-medium">Effectifs</label>
-                                <InputNumber v-model="form.workforce" />
-                            </div>
-                            <div class="flex flex-col gap-2">
-                                <label class="text-sm font-medium">{{ $t('tiers.legal.capital') }} (€)</label>
-                                <InputNumber v-model="form.capital" mode="currency" currency="EUR" locale="fr-FR" />
-                            </div>
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <AccordionPanel value="1">
-                    <AccordionHeader>{{ $t('tiers.financial.title') }}</AccordionHeader>
-                    <AccordionContent>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.financial.default_lang') }}</label><Dropdown v-model="form.default_lang" :options="langOptions" /></div>
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.financial.currency') }}</label><Dropdown v-model="form.currency" :options="currencyOptions" optionLabel="label" optionValue="value" /></div>
-                            
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.financial.payment_terms') }}</label><Dropdown v-model="form.payment_conditions" :options="payConditions" :placeholder="$t('tiers.financial.select')" /></div>
-                            <div class="flex flex-col gap-2"><label class="text-sm font-medium">{{ $t('tiers.financial.payment_mode') }}</label><Dropdown v-model="form.payment_mode" :options="payModes" :placeholder="$t('tiers.financial.select')" /></div>
-                            <div class="flex flex-col gap-2">
-                                <label>{{ $t('tiers.financial.tags_client') }}</label>
-                                <Chips v-model="form.tags_client" separator="," placeholder="Entrez un tag et validez" />
-                            </div>
-                            <div class="flex flex-col gap-2">
-                                <label>{{ $t('tiers.financial.tags_supplier') }}</label>
-                                <Chips v-model="form.tags_supplier" separator="," placeholder="Entrez un tag et validez" />
-                            </div>
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <AccordionPanel value="2">
-                    <AccordionHeader>{{ $t('tiers.attachments.title') }}</AccordionHeader>
-                    <AccordionContent>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                            <div class="flex flex-col gap-2">
-                                <label class="text-sm font-medium">{{ $t('tiers.attachments.assign_reps') }}</label>
-                                <InputText 
-                                    v-model="form.assigned_to" 
-                                    :placeholder="$t('tiers.attachments.add_rep_placeholder')" 
-                                    class="w-full"
-                                />
-                            </div>
-                            
-                            <div class="flex flex-col gap-2">
-                                <label class="block mb-2 text-sm font-medium">{{ $t('tiers.attachments.logo') }}</label>
-                                <FileUpload mode="basic" name="logo" accept="image/*" :maxFileSize="1000000" @select="onLogoUpload" :chooseLabel="$t('tiers.attachments.logo_choose')" />
-                            </div>
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-            </Accordion>
-        </form>
+    <!-- ====== HEADER ====== -->
+    <div class="bg-white dark:bg-gray-800 p-5 shadow-sm sticky top-0 z-10 mb-6 flex justify-between items-center border-b border-gray-200 dark:border-gray-700 rounded-b-xl">
+      <div class="flex items-center gap-4">
+        <Button icon="pi pi-arrow-left" text rounded @click="goBack" />
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ pageTitle }}</h1>
+        <ScoreBadge :score="computedScore.score" />
+      </div>
+      <div class="flex gap-2">
+        <Button label="Annuler" severity="secondary" outlined @click="goBack" />
+        <Button
+          :label="isEditMode ? 'Enregistrer' : 'Créer le tiers'"
+          icon="pi pi-check"
+          :loading="submitting"
+          @click="handleSubmit"
+        />
+      </div>
     </div>
+
+    <form @submit.prevent="handleSubmit" class="px-4 sm:px-6 space-y-6">
+
+      <Message v-if="errorMsg" severity="error" :closable="false" class="mb-4">{{ errorMsg }}</Message>
+
+      <!-- Score details -->
+      <div v-if="computedScore.missing.length > 0" class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
+        <p class="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">
+          <i class="pi pi-info-circle mr-1"></i> Informations manquantes pour la complétude :
+        </p>
+        <ul class="list-disc list-inside text-sm text-amber-700 dark:text-amber-300 space-y-1">
+          <li v-for="item in computedScore.missing" :key="item">{{ item }}</li>
+        </ul>
+      </div>
+
+      <!-- ====== NATURE SELECTOR ====== -->
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Nature du tiers</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <button
+            type="button"
+            @click="form.nature = 'personne_physique'"
+            class="flex items-center gap-4 p-5 rounded-xl border-2 transition-all duration-200 cursor-pointer"
+            :class="isPersonne
+              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-md'
+              : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-300'"
+          >
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center"
+                 :class="isPersonne ? 'bg-blue-100 dark:bg-blue-800' : 'bg-gray-100 dark:bg-gray-700'">
+              <i class="pi pi-user text-xl" :class="isPersonne ? 'text-blue-600' : 'text-gray-500'"></i>
+            </div>
+            <div class="text-left">
+              <p class="font-semibold text-gray-900 dark:text-white">Personne physique</p>
+              <p class="text-sm text-gray-500">Individu, apprenant, formateur indépendant</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            @click="!forcePersonne && (form.nature = 'organisation')"
+            :disabled="forcePersonne"
+            class="flex items-center gap-4 p-5 rounded-xl border-2 transition-all duration-200"
+            :class="[
+              forcePersonne
+                ? 'opacity-40 cursor-not-allowed border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800'
+                : isOrganisation
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-md cursor-pointer'
+                  : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-300 cursor-pointer'
+            ]"
+          >
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center"
+                 :class="isOrganisation && !forcePersonne ? 'bg-blue-100 dark:bg-blue-800' : 'bg-gray-100 dark:bg-gray-700'">
+              <i class="pi pi-building text-xl" :class="isOrganisation && !forcePersonne ? 'text-blue-600' : 'text-gray-500'"></i>
+            </div>
+            <div class="text-left">
+              <p class="font-semibold text-gray-900 dark:text-white">Organisation</p>
+              <p v-if="forcePersonne" class="text-xs text-orange-500">Non applicable pour apprenant / formateur</p>
+              <p v-else class="text-sm text-gray-500">Entreprise, association, organisme</p>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- ====== ROLES SELECTOR ====== -->
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Rôles</h2>
+        <div class="flex flex-wrap gap-3">
+          <label
+            v-for="role in TIER_ROLE_OPTIONS"
+            :key="role.value"
+            class="flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all duration-200"
+            :class="hasRole(role.value)
+              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+              : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-300'"
+          >
+            <Checkbox
+              v-model="selectedRoles"
+              :value="role.value"
+              :inputId="'role-' + role.value"
+            />
+            <i :class="'pi ' + role.icon" class="text-sm"></i>
+            <span class="text-sm font-medium">{{ role.label }}</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- ====== INFORMATIONS GENERALES ====== -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-blue-500">
+        <div class="p-6">
+          <div class="flex items-center gap-2 mb-5">
+            <i class="pi pi-id-card text-blue-500"></i>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Informations générales</h2>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+            <!-- Personne physique fields -->
+            <template v-if="isPersonne">
+              <div class="flex flex-col gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Prénom *</label>
+                <InputText v-model="form.prenom" placeholder="Prénom" :invalid="!!errors.prenom" @input="clearError('prenom')" />
+              </div>
+              <div class="flex flex-col gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Nom de famille *</label>
+                <InputText v-model="form.nom_famille" placeholder="Nom de famille" :invalid="!!errors.nom_famille" @input="clearError('nom_famille')" />
+              </div>
+            </template>
+
+            <!-- Organisation fields -->
+            <template v-if="isOrganisation">
+              <div class="flex flex-col gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Raison sociale *</label>
+                <InputText v-model="form.raison_sociale" placeholder="Raison sociale" :invalid="!!errors.raison_sociale" @input="clearError('raison_sociale')" />
+              </div>
+              <div class="flex flex-col gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">SIREN</label>
+                <div class="relative">
+                  <InputText v-model="form.siren" maxlength="9" placeholder="123 456 789" class="w-full" />
+                  <span v-if="sirenLoading" class="absolute right-3 top-1/2 -translate-y-1/2">
+                    <i class="pi pi-spin pi-spinner text-blue-500"></i>
+                  </span>
+                  <span v-else-if="form.siren?.replace(/\D/g, '').length === 9 && form.raison_sociale" class="absolute right-3 top-1/2 -translate-y-1/2">
+                    <i class="pi pi-check-circle text-green-500"></i>
+                  </span>
+                </div>
+                <span class="text-xs text-gray-400">9 chiffres - auto-remplissage via API entreprise</span>
+              </div>
+              <div class="flex flex-col gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">SIRET</label>
+                <InputText v-model="form.siret" maxlength="14" placeholder="123 456 789 00012" />
+              </div>
+              <div class="flex flex-col gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">NAF / APE</label>
+                <InputText v-model="form.naf_ape" maxlength="5" placeholder="8559A" />
+              </div>
+              <div class="flex flex-col gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">TVA intracommunautaire</label>
+                <InputText v-model="form.tva_intracom" placeholder="FR12345678901" />
+              </div>
+            </template>
+
+            <!-- Common fields -->
+            <Divider class="col-span-1 md:col-span-2" />
+
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+              <InputText v-model="form.email" type="email" placeholder="contact@exemple.com" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Téléphone</label>
+              <InputMask v-model="form.telephone" mask="99-99-99-99-99" placeholder="01-12-12-12-12" slotChar="" />
+            </div>
+            <div class="flex flex-col gap-2 md:col-span-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Adresse</label>
+              <AddressAutocomplete
+                v-model="form.address"
+                @address-selected="handleAddressSelected"
+                placeholder="Saisissez une adresse..."
+              />
+              <span class="text-xs text-gray-400"><i class="pi pi-info-circle mr-1"></i>Auto-complétion via adresse.data.gouv.fr</span>
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Code postal</label>
+              <InputText v-model="form.zip_code" maxlength="5" placeholder="75001" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Ville</label>
+              <InputText v-model="form.city" placeholder="Paris" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Pays</label>
+              <InputText v-model="form.country" placeholder="France" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Site web</label>
+              <InputText v-model="form.site_web" placeholder="https://www.exemple.com" />
+            </div>
+
+            <Divider class="col-span-1 md:col-span-2" />
+
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Statut</label>
+              <Dropdown
+                v-model="form.statut"
+                :options="TIER_STATUTS"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Sélectionner un statut"
+              />
+            </div>
+            <div v-if="hasRole('client')" class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Statut commercial</label>
+              <Dropdown
+                v-model="form.statut_commercial"
+                :options="STATUT_COMMERCIAL"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Sélectionner"
+              />
+            </div>
+            <div class="flex flex-col gap-2 md:col-span-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Tags</label>
+              <Chips v-model="form.tags" separator="," placeholder="Ajouter un tag et valider" />
+            </div>
+            <div class="flex flex-col gap-2 md:col-span-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
+              <Textarea v-model="form.notes" rows="3" autoResize placeholder="Notes internes..." />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== BLOC APPRENANT ====== -->
+      <div v-if="hasRole('apprenant')" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-green-500">
+        <div class="p-6">
+          <div class="flex items-center gap-2 mb-5">
+            <i class="pi pi-user text-green-500"></i>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Informations apprenant</h2>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Date de naissance</label>
+              <DatePicker v-model="form.date_naissance" dateFormat="dd/mm/yy" showIcon placeholder="jj/mm/aaaa" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Niveau d'entrée</label>
+              <InputText v-model="form.niveau_entree" placeholder="Ex : Bac+2, CAP..." />
+            </div>
+            <div class="flex flex-col gap-2 md:col-span-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Objectif professionnel</label>
+              <Textarea v-model="form.objectif_professionnel" rows="3" autoResize placeholder="Décrivez l'objectif professionnel..." />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Situation de handicap</label>
+              <Dropdown
+                v-model="form.situation_handicap"
+                :options="HANDICAP_OPTIONS"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Sélectionner"
+              />
+            </div>
+            <div v-if="form.situation_handicap === 'oui'" class="flex flex-col gap-2 md:col-span-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Besoins d'aménagement</label>
+              <Textarea v-model="form.besoin_amenagement" rows="3" autoResize placeholder="Décrivez les besoins d'aménagement..." />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== BLOC FORMATEUR ====== -->
+      <div v-if="hasRole('formateur')" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-amber-500">
+        <div class="p-6">
+          <div class="flex items-center gap-2 mb-5">
+            <i class="pi pi-id-card text-amber-500"></i>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Informations formateur</h2>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <!-- NDA -->
+            <div class="flex flex-col gap-3 md:col-span-2">
+              <div class="flex items-center gap-3">
+                <ToggleSwitch v-model="form.nda_signe" />
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">NDA signé</label>
+              </div>
+            </div>
+            <div v-if="form.nda_signe" class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Date de signature NDA</label>
+              <DatePicker v-model="form.nda_date_signature" dateFormat="dd/mm/yy" showIcon placeholder="jj/mm/aaaa" />
+            </div>
+            <div v-if="form.nda_signe" class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Document NDA</label>
+              <FileUpload
+                mode="basic"
+                accept=".pdf"
+                :maxFileSize="10485760"
+                @select="(e) => onFileUpload(e, 'nda_document_url')"
+                chooseLabel="Joindre le NDA"
+                :disabled="fileUploading"
+              />
+              <a v-if="form.nda_document_url" :href="form.nda_document_url" target="_blank" class="text-sm text-blue-500 underline">
+                <i class="pi pi-file-pdf mr-1"></i>Voir le document
+              </a>
+            </div>
+
+            <Divider class="col-span-1 md:col-span-2" />
+
+            <!-- Declaration -->
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Déclaration d'activité (NDA)</label>
+              <InputText v-model="form.declaration_activite" placeholder="Numéro de déclaration" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Région de déclaration</label>
+              <InputText v-model="form.declaration_region" placeholder="Ex : Île-de-France" />
+            </div>
+
+            <Divider class="col-span-1 md:col-span-2" />
+
+            <!-- Qualiopi -->
+            <div class="flex flex-col gap-3 md:col-span-2">
+              <div class="flex items-center gap-3">
+                <ToggleSwitch v-model="form.qualiopi_certifie" />
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Certifié Qualiopi</label>
+              </div>
+            </div>
+            <template v-if="form.qualiopi_certifie">
+              <div class="flex flex-col gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Certificateur</label>
+                <InputText v-model="form.qualiopi_certificateur" placeholder="Nom du certificateur" />
+              </div>
+              <div class="flex flex-col gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Date de fin de validité</label>
+                <DatePicker v-model="form.qualiopi_date_validite" dateFormat="dd/mm/yy" showIcon placeholder="jj/mm/aaaa" />
+              </div>
+              <div class="flex flex-col gap-2 md:col-span-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Certificat Qualiopi</label>
+                <FileUpload
+                  mode="basic"
+                  accept=".pdf,image/*"
+                  :maxFileSize="10485760"
+                  @select="(e) => onFileUpload(e, 'qualiopi_certificat_url')"
+                  chooseLabel="Joindre le certificat"
+                  :disabled="fileUploading"
+                />
+                <a v-if="form.qualiopi_certificat_url" :href="form.qualiopi_certificat_url" target="_blank" class="text-sm text-blue-500 underline">
+                  <i class="pi pi-file-pdf mr-1"></i>Voir le certificat
+                </a>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== BLOC FOURNISSEUR ====== -->
+      <div v-if="hasRole('fournisseur')" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-gray-500">
+        <div class="p-6">
+          <div class="flex items-center gap-2 mb-5">
+            <i class="pi pi-briefcase text-gray-500"></i>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Informations fournisseur</h2>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Type de fournisseur</label>
+              <Dropdown
+                v-model="form.fournisseur_type"
+                :options="FOURNISSEUR_TYPES"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Sélectionner un type"
+              />
+            </div>
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-3 mt-6">
+                <ToggleSwitch v-model="form.accord_cadre_signe" />
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Accord-cadre signé</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+    </form>
+  </div>
 </template>

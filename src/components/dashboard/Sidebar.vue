@@ -1,69 +1,16 @@
 <script setup>
-import { ref, computed, nextTick } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '../../stores/auth';
+import { useNavigation } from '../../composables/useNavigation';
+import LayoutToggleButton from './LayoutToggleButton.vue';
 
-const route = useRoute();
 const { t } = useI18n();
 const authStore = useAuthStore();
+const { navigation, isCurrent } = useNavigation();
 
-// Track which menu is hovered and its position
 const hoveredMenu = ref(null);
 const submenuStyle = ref({});
-
-const baseNavigation = [
-  { name: 'dashboard', href: '/dashboard', icon: 'pi-home' },
-  {
-    name: 'tiers',
-    href: '/dashboard/tiers',
-    icon: 'pi-users',
-    submenu: [
-      { name: 'tiers_list', href: '/dashboard/tiers', icon: 'pi-list' },
-      { name: 'learners', href: '/dashboard/learners', icon: 'pi-user' }
-    ]
-  },
-  { name: 'catalogue', href: '/dashboard/catalogue', icon: 'pi-book' },
-  {
-    name: 'projects',
-    href: '/dashboard/projets',
-    icon: 'pi-briefcase',
-    submenu: [
-      { name: 'formations', href: '/dashboard/projets', icon: 'pi-graduation-cap' },
-      { name: 'conseil', href: '#', icon: 'pi-comments', disabled: true }
-    ]
-  },
-  { name: 'analysis', href: '/dashboard/analyse-doc', icon: 'pi-search' },
-  { name: 'manual', href: '/dashboard/manuel-qualiopi', icon: 'pi-book' },
-  { name: 'genedoc', href: 'https://qualiopi-modelisation.genedoc.fr/', icon: 'pi-link' },
-  {
-    name: 'settings',
-    href: '/dashboard/company',
-    icon: 'pi-cog',
-    submenu: [
-      { name: 'company_settings', href: '/dashboard/company', icon: 'pi-building' },
-      { name: 'quiz_settings', href: '/dashboard/quiz-settings', icon: 'pi-question-circle' }
-    ]
-  },
-];
-
-// Admin-only menu item
-const adminNavItem = { name: 'admin', href: '/dashboard/admin', icon: 'pi-shield', adminOnly: true };
-
-// Computed navigation based on user role
-const navigation = computed(() => {
-  if (authStore.isAdmin) {
-    return [...baseNavigation, adminNavItem];
-  }
-  return baseNavigation;
-});
-
-const isCurrent = (path) => {
-  if (path === '/dashboard') {
-    return route.path === '/dashboard'; 
-  }
-  return route.path.startsWith(path);
-};
 
 const handleMouseEnter = (event, itemName) => {
   const rect = event.currentTarget.getBoundingClientRect();
@@ -86,11 +33,24 @@ const logout = async () => {
 
 <template>
   <div class="flex flex-col h-full bg-slate-900 w-64 text-white">
-    <div class="p-6 flex items-center justify-center border-b border-slate-800">
+    <div class="p-6 flex flex-col items-center justify-center border-b border-slate-800 gap-2">
       <h1 class="text-xl font-bold bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">Certiwize</h1>
+      <!-- Nom de l'organisation courante -->
+      <div v-if="authStore.currentOrganization" class="w-full">
+        <select
+          v-if="authStore.organizations.length > 1"
+          :value="authStore.currentOrganization?.id"
+          @change="authStore.switchOrganization($event.target.value)"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option v-for="org in authStore.organizations" :key="org.id" :value="org.id">{{ org.name }}</option>
+        </select>
+        <p v-else class="text-xs text-slate-400 text-center truncate">{{ authStore.currentOrganization.name }}</p>
+      </div>
     </div>
 
-    <nav class="flex-1 p-4 space-y-2">
+    <nav class="flex-1 p-4 space-y-2 flex flex-col">
+      <div class="flex-1 space-y-2">
       <div
         v-for="item in navigation"
         :key="item.name"
@@ -100,19 +60,22 @@ const logout = async () => {
       >
         <!-- Main Menu Item -->
         <a
-          :href="item.submenu ? undefined : item.href"
+          :href="item.disabled ? undefined : (item.submenu ? undefined : item.href)"
           :target="item.href?.startsWith('http') ? '_blank' : undefined"
           :rel="item.href?.startsWith('http') ? 'noopener noreferrer' : undefined"
-          class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group no-underline cursor-pointer"
+          class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group no-underline"
           :class="[
-            isCurrent(item.href)
-              ? 'bg-primary text-white shadow-lg shadow-primary/25'
-              : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            item.disabled
+              ? 'text-slate-600 cursor-not-allowed'
+              : (!item.href?.startsWith('http') && isCurrent(item.href))
+                ? 'bg-primary text-white shadow-lg shadow-primary/25 cursor-pointer'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer'
           ]"
-          @click="item.submenu ? $event.preventDefault() : null"
+          @click="item.disabled ? $event.preventDefault() : (item.submenu ? $event.preventDefault() : null)"
         >
-          <i class="pi" :class="[item.icon, isCurrent(item.href) ? 'text-white' : 'text-slate-400 group-hover:text-white']"></i>
+          <i class="pi" :class="[item.icon, item.disabled ? 'text-slate-600' : (!item.href?.startsWith('http') && isCurrent(item.href)) ? 'text-white' : 'text-slate-400 group-hover:text-white']"></i>
           <span class="font-medium flex-1">{{ t(`nav.${item.name}`) }}</span>
+          <span v-if="item.disabled" class="text-xs bg-slate-700 px-1.5 py-0.5 rounded">{{ t('nav.coming_soon') }}</span>
           <i v-if="item.submenu" class="pi pi-chevron-right text-xs opacity-50"></i>
         </a>
 
@@ -148,11 +111,24 @@ const logout = async () => {
           </transition>
         </Teleport>
       </div>
+      </div>
+
+      <!-- Layout Toggle at bottom -->
+      <div class="pt-4 border-t border-slate-800">
+        <LayoutToggleButton />
+      </div>
     </nav>
   </div>
 </template>
 
 <style scoped>
+/* Forcer la couleur des liens visités dans la sidebar */
+.sidebar-link,
+.sidebar-link:visited,
+.sidebar-link:link {
+  color: inherit !important;
+}
+
 .submenu-fade-enter-active,
 .submenu-fade-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;

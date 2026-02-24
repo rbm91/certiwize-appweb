@@ -261,45 +261,65 @@ onMounted(() => {
                     {{ t('manual.empty') }}
                 </div>
 
-                <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <Card
+                <!-- Vue liste style Dropbox -->
+                <div v-else class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <!-- En-tête -->
+                    <div class="hidden md:grid grid-cols-12 gap-4 px-5 py-3 bg-gray-50 dark:bg-gray-700/50 text-sm font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                        <div class="col-span-1">Code</div>
+                        <div class="col-span-5">Nom</div>
+                        <div class="col-span-4">Description</div>
+                        <div class="col-span-2 text-right">Actions</div>
+                    </div>
+
+                    <!-- Lignes -->
+                    <div
                         v-for="doc in manuels"
                         :key="doc.id"
-                        class="hover:shadow-lg transition-all border border-gray-100 dark:border-gray-700 cursor-pointer group relative"
+                        class="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 items-center px-5 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:bg-blue-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors group"
                         @click="openFile(doc.file_url)"
                     >
-                        <template #header>
-                            <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 group-hover:bg-primary transition-colors"></div>
-                        </template>
+                        <!-- Code -->
+                        <div class="md:col-span-1">
+                            <Tag :value="doc.code?.toUpperCase()" :severity="getSeverity(doc.code)" class="font-mono text-xs" v-if="doc.code" />
+                        </div>
 
-                        <template #title>
-                            <div class="flex flex-col gap-2">
-                                <div class="flex justify-between items-start">
-                                    <Tag :value="doc.code.toUpperCase()" :severity="getSeverity(doc.code)" class="font-mono text-sm" v-if="doc.code" />
-                                    <div class="flex items-center gap-2">
-                                        <i class="pi pi-file-pdf text-red-500 text-xl"></i>
-                                        <Button
-                                            icon="pi pi-trash"
-                                            text
-                                            rounded
-                                            severity="danger"
-                                            size="small"
-                                            class="!opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0"
-                                            v-tooltip.top="'Supprimer'"
-                                            @click="(e) => deleteDocument(doc, e)"
-                                        />
-                                    </div>
-                                </div>
-                                <span class="text-lg font-semibold leading-tight mt-1">{{ doc.title }}</span>
-                            </div>
-                        </template>
+                        <!-- Nom avec icône -->
+                        <div class="md:col-span-5 flex items-center gap-3">
+                            <i class="pi pi-file-pdf text-red-500 text-lg flex-shrink-0"></i>
+                            <span class="font-medium text-gray-900 dark:text-white text-sm truncate">{{ doc.title }}</span>
+                        </div>
 
-                        <template #content>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 min-h-[2.5rem]">
+                        <!-- Description -->
+                        <div class="md:col-span-4">
+                            <span class="text-sm text-gray-500 dark:text-gray-400 line-clamp-1">
                                 {{ doc.description || t('manual.default_desc') }}
-                            </p>
-                        </template>
-                    </Card>
+                            </span>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="md:col-span-2 flex items-center justify-end gap-1">
+                            <Button
+                                icon="pi pi-download"
+                                text
+                                rounded
+                                severity="secondary"
+                                size="small"
+                                class="opacity-0 group-hover:opacity-100 transition-opacity"
+                                v-tooltip.top="'Télécharger'"
+                                @click.stop="openFile(doc.file_url)"
+                            />
+                            <Button
+                                icon="pi pi-trash"
+                                text
+                                rounded
+                                severity="danger"
+                                size="small"
+                                class="opacity-0 group-hover:opacity-100 transition-opacity"
+                                v-tooltip.top="'Supprimer'"
+                                @click="(e) => deleteDocument(doc, e)"
+                            />
+                        </div>
+                    </div>
                 </div>
             </TabPanel>
 
