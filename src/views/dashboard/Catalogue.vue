@@ -162,9 +162,7 @@ onMounted(async () => {
       <!-- TAB 1 : Bibliothèque formations              -->
       <!-- ============================================ -->
       <TabPanel header="Bibliothèque formations">
-        <div class="flex justify-end mb-4">
-          <Button label="Nouveau modèle" icon="pi pi-plus" severity="primary" @click="openNewFormationDialog" />
-        </div>
+        <!-- Bouton "Nouveau modèle" retiré temporairement -->
 
         <DataTable
           :value="formations"
@@ -212,8 +210,7 @@ onMounted(async () => {
                   @click="viewPdf(slotProps.data.pdf_url)"
                   v-tooltip.top="'Aperçu PDF'"
                 />
-                <!-- Bouton supprimer désactivé temporairement (FK prestations) -->
-                <!-- <Button icon="pi pi-trash" text rounded severity="danger" @click="confirmDeleteFormation(slotProps.data.id)" v-tooltip.top="'Supprimer'" /> -->
+                <Button icon="pi pi-trash" text rounded severity="danger" @click="confirmDeleteFormation(slotProps.data.id)" v-tooltip.top="'Supprimer'" />
               </div>
             </template>
           </Column>
