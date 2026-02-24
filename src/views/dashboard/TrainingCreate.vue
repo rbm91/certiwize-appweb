@@ -34,15 +34,18 @@ const { errors, validate, clearError } = useFormValidation();
 const { t } = useI18n();
 
 // État
-const trainingId = ref(route.params.id || null); // ID de la formation en base
-const pdfUrl = ref(null); // Si rempli, on affiche le PDF
-const pdfTimestamp = ref(null); // Timestamp pour cache buster
+const trainingId = ref(route.params.id || null);
+const pdfUrl = ref(null);
+const pdfTimestamp = ref(null);
 const submitting = ref(false);
 const isEditMode = computed(() => !!route.params.id);
-const progressValue = ref(0); // Progression en % (0-100)
-const progressTime = ref(0); // Temps écoulé en secondes
-const formLoading = ref(!!route.params.id); // true si mode édition (le temps de charger)
-const loadError = ref(null); // Message d'erreur si chargement échoue
+const progressValue = ref(0);
+const progressTime = ref(0);
+const formLoading = ref(false); // TOUJOURS false au départ — activé dans onMounted si édition
+const loadError = ref(null);
+
+// Version marker pour vérifier le cache
+console.log('[TrainingCreate] v4 | mode:', isEditMode.value ? 'EDIT' : 'CREATE', '| id:', route.params.id || 'aucun');
 
 // PDF URL avec cache buster
 const pdfUrlWithCache = computed(() => {
