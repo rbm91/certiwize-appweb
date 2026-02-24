@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useTrainingStore } from '../../stores/training';
 import { useAuthStore } from '../../stores/auth';
 import { supabase } from '../../supabase';
@@ -27,6 +27,7 @@ const modalitesOptions = [
 
 const confirm = useConfirm();
 const route = useRoute();
+const router = useRouter();
 const trainingStore = useTrainingStore();
 const authStore = useAuthStore();
 const { errors, validate, clearError } = useFormValidation();
@@ -119,16 +120,21 @@ watch([() => form.value.horaires_debut, () => form.value.horaires_fin], () => {
 onMounted(async () => {
     if (trainingId.value) {
         try {
-            const orgId = authStore?.currentOrganization?.id;
-            let loadQuery = supabase
+            // Charger par ID uniquement — le RLS gère l'accès
+            const { data, error } = await supabase
                 .from('formations')
                 .select('*')
-                .eq('id', trainingId.value);
-            if (orgId) loadQuery = loadQuery.eq('organization_id', orgId);
-            const { data, error } = await loadQuery.single();
+                .eq('id', trainingId.value)
+                .maybeSingle();
 
             if (error) throw error;
-            
+
+            if (!data) {
+                console.warn('Formation introuvable:', trainingId.value);
+                router.push('/dashboard/catalogue');
+                return;
+            }
+
             // Charger les données du contenu dans le formulaire
             if (data.content) {
                 form.value = { ...form.value, ...data.content };
@@ -161,7 +167,8 @@ onMounted(async () => {
                 }
             }
         } catch (err) {
-            window.location.href = '/dashboard/catalogue';
+            console.error('Erreur chargement formation:', err);
+            router.push('/dashboard/catalogue');
         }
     }
 });
@@ -344,7 +351,7 @@ const resetForm = () => {
 };
 
 const goBack = () => {
-    window.location.href = '/dashboard/catalogue';
+    router.push('/dashboard/catalogue');
 };
 </script>
 
