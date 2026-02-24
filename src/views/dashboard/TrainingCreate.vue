@@ -6,34 +6,26 @@ import { useAuthStore } from '../../stores/auth';
 import { supabase } from '../../supabase';
 import { useI18n } from 'vue-i18n';
 
-// Imports PrimeVue
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import InputNumber from 'primevue/inputnumber';
 import Button from 'primevue/button';
 import Calendar from 'primevue/calendar';
-import Message from 'primevue/message';
 import Dropdown from 'primevue/dropdown';
 import ProgressBar from 'primevue/progressbar';
-import { useConfirm } from 'primevue/useconfirm';
-import { useFormValidation } from '../../composables/useFormValidation';
 
-// Options pour le dropdown modalités
 const modalitesOptions = [
     { label: 'Présentiel', value: 'presentiel' },
     { label: 'Distanciel', value: 'distanciel' },
     { label: 'Mixte', value: 'mixte' }
 ];
 
-const confirm = useConfirm();
 const route = useRoute();
 const router = useRouter();
 const trainingStore = useTrainingStore();
 const authStore = useAuthStore();
-const { errors, validate, clearError } = useFormValidation();
 const { t } = useI18n();
 
-// État
 const trainingId = ref(route.params.id || null);
 const pdfUrl = ref(null);
 const pdfTimestamp = ref(null);
@@ -41,54 +33,37 @@ const submitting = ref(false);
 const isEditMode = computed(() => !!route.params.id);
 const progressValue = ref(0);
 const progressTime = ref(0);
-const formLoading = ref(false); // TOUJOURS false au départ — activé dans onMounted si édition
+const formLoading = ref(false);
 const loadError = ref(null);
-const setupError = ref(null); // Erreur de setup visible dans le UI
+const titleError = ref(false);
 
-// Version marker VISIBLE — mise à jour à chaque build
-const BUILD_ID = 'v5-' + Date.now().toString(36);
-console.log('[TrainingCreate]', BUILD_ID, '| mode:', isEditMode.value ? 'EDIT' : 'CREATE', '| id:', route.params.id || 'aucun', '| auth:', !!authStore.user, '| org:', authStore.currentOrganization?.name || 'none');
+console.log('[TrainingCreate] v6 | mode:', isEditMode.value ? 'EDIT' : 'CREATE');
 
-// Vérifier l'auth dès le setup
-if (!authStore.user) {
-  console.warn('[TrainingCreate] ATTENTION: Aucun utilisateur connecté!');
-  setupError.value = 'Vous devez être connecté pour créer ou modifier une formation.';
-}
-
-// PDF URL avec cache buster
 const pdfUrlWithCache = computed(() => {
     if (!pdfUrl.value) return null;
     const separator = pdfUrl.value.includes('?') ? '&' : '?';
-    const timestamp = pdfTimestamp.value || Date.now();
-    return `${pdfUrl.value}${separator}t=${timestamp}`;
+    return `${pdfUrl.value}${separator}t=${pdfTimestamp.value || Date.now()}`;
 });
 
-// Fonction pour rafraîchir manuellement le PDF
-const refreshPdf = () => {
-    pdfTimestamp.value = Date.now();
-};
+const refreshPdf = () => { pdfTimestamp.value = Date.now(); };
 
-// Validation du formulaire
-const isFormValid = computed(() => {
-    return form.value.titre?.trim() !== '';
-});
+const isFormValid = computed(() => form.value.titre?.trim() !== '');
 
-// Formulaire mappé sur vos balises
 const form = ref({
     titre: '',
-    maj: new Date(), // Date de mise à jour
+    maj: new Date(),
     public_vise: '',
     grp_max: 10,
     prerequis: '',
     objc_pedagq: '',
-    duree: null, // Durée en heures (nombre)
-    dates: null, // Date de début (Calendar)
-    dates_fin: null, // Date de fin (Calendar)
-    horaires_debut: null, // Heure de début
-    horaires_fin: null, // Heure de fin
-    horaires: '09h00 - 17h00', // Format texte pour compatibilité (généré automatiquement)
+    duree: null,
+    dates: null,
+    dates_fin: null,
+    horaires_debut: null,
+    horaires_fin: null,
+    horaires: '09h00 - 17h00',
     lieu: '',
-    num: '', // Numéro de téléphone ou référence
+    num: '',
     mail: '',
     tarif: 0,
     ref_handi: '',
@@ -101,11 +76,8 @@ Workshop 1 :
 
 2ème Jour : ...
 `,
-
     moyens_pedagq: '',
     modalités_eval: '',
-
-    // CDC fields
     public_cible: '',
     objectifs_pedagogiques: '',
     programme: '',
@@ -115,122 +87,91 @@ Workshop 1 :
     modalites: null
 });
 
-// Watcher pour générer automatiquement le format horaires
 watch([() => form.value.horaires_debut, () => form.value.horaires_fin], () => {
     if (form.value.horaires_debut && form.value.horaires_fin) {
         const debut = new Date(form.value.horaires_debut);
         const fin = new Date(form.value.horaires_fin);
-        const formatHeure = (date) => {
-            const h = date.getHours().toString().padStart(2, '0');
-            const m = date.getMinutes().toString().padStart(2, '0');
-            return `${h}h${m}`;
-        };
-        form.value.horaires = `${formatHeure(debut)} - ${formatHeure(fin)}`;
+        const fmt = (d) => `${d.getHours().toString().padStart(2,'0')}h${d.getMinutes().toString().padStart(2,'0')}`;
+        form.value.horaires = `${fmt(debut)} - ${fmt(fin)}`;
     }
 });
 
-// Charger la formation si on est en mode édition
 onMounted(async () => {
     if (trainingId.value) {
         formLoading.value = true;
         loadError.value = null;
         try {
-            console.log('[TrainingCreate] Chargement formation:', trainingId.value);
-
-            // Charger par ID uniquement — le RLS gère l'accès
             const { data, error } = await supabase
                 .from('formations')
                 .select('*')
                 .eq('id', trainingId.value)
                 .maybeSingle();
 
-            console.log('[TrainingCreate] Résultat:', { data: !!data, error });
-
             if (error) throw error;
-
             if (!data) {
-                loadError.value = `Formation introuvable (ID: ${trainingId.value}). Vérifiez que la formation existe et que vous avez les droits d'accès.`;
+                loadError.value = 'Formation introuvable.';
                 formLoading.value = false;
                 return;
             }
 
-            // Charger les données du contenu dans le formulaire
             if (data.content) {
                 form.value = { ...form.value, ...data.content };
-                if (data.content.maj) {
-                    form.value.maj = new Date(data.content.maj);
-                }
-                if (data.content.dates) {
-                    form.value.dates = new Date(data.content.dates);
-                }
-                if (data.content.dates_fin) {
-                    form.value.dates_fin = new Date(data.content.dates_fin);
-                }
+                if (data.content.maj) form.value.maj = new Date(data.content.maj);
+                if (data.content.dates) form.value.dates = new Date(data.content.dates);
+                if (data.content.dates_fin) form.value.dates_fin = new Date(data.content.dates_fin);
                 if (data.content.horaires && typeof data.content.horaires === 'string') {
                     const match = data.content.horaires.match(/(\d{2})h(\d{2})\s*-\s*(\d{2})h(\d{2})/);
                     if (match) {
                         const today = new Date();
-                        const debut = new Date(today);
-                        debut.setHours(parseInt(match[1]), parseInt(match[2]), 0);
-                        const fin = new Date(today);
-                        fin.setHours(parseInt(match[3]), parseInt(match[4]), 0);
-                        form.value.horaires_debut = debut;
-                        form.value.horaires_fin = fin;
+                        const d = new Date(today); d.setHours(parseInt(match[1]), parseInt(match[2]), 0);
+                        const f = new Date(today); f.setHours(parseInt(match[3]), parseInt(match[4]), 0);
+                        form.value.horaires_debut = d;
+                        form.value.horaires_fin = f;
                     }
-                } else if (data.content.horaires_debut && data.content.horaires_fin) {
-                    form.value.horaires_debut = new Date(data.content.horaires_debut);
-                    form.value.horaires_fin = new Date(data.content.horaires_fin);
                 }
             }
         } catch (err) {
-            console.error('[TrainingCreate] Erreur chargement:', err);
-            loadError.value = `Erreur de chargement : ${err.message}`;
+            console.error('[TrainingCreate] Load error:', err);
+            loadError.value = err.message;
         } finally {
             formLoading.value = false;
         }
     }
 });
 
-// Actions - Génération avec polling optimisé et barre de progression
 const handleGenerate = async () => {
-    const isValid = validate({ titre: form.value.titre });
-    if (!isValid) return;
-
+    if (!form.value.titre?.trim()) {
+        titleError.value = true;
+        return;
+    }
+    titleError.value = false;
     submitting.value = true;
     progressValue.value = 0;
     progressTime.value = 0;
 
-    // Timestamp de début de génération pour détecter les mises à jour
     const generationStartTime = new Date().toISOString();
 
-    // Timer pour la barre de progression (estimation : 40s max)
     const progressInterval = setInterval(() => {
         progressTime.value++;
-        // Progression plus rapide au début, plus lente vers la fin
         if (progressValue.value < 90) {
             progressValue.value = Math.min(90, (progressTime.value / 40) * 100);
         }
     }, 1000);
 
     try {
-        // 1. Sauvegarde d'abord
         const saveResult = await trainingStore.saveTraining(form.value, trainingId.value);
-
         if (!saveResult.success) {
-            alert(t('training.error_save') + saveResult.error);
+            alert('Erreur sauvegarde : ' + saveResult.error);
             clearInterval(progressInterval);
             submitting.value = false;
             progressValue.value = 0;
-            progressTime.value = 0;
             return;
         }
 
-        trainingId.value = saveResult.data.id; // On récupère l'ID créé
+        trainingId.value = saveResult.data.id;
 
-        // 2. Lancement de la génération (n8n) avec timeout de 30s
         const generationPromise = trainingStore.generatePdf(trainingId.value, form.value);
 
-        // Polling : vérifier toutes les 4 secondes si le PDF est disponible
         let documentReady = false;
         let pollInterval = null;
 
@@ -242,130 +183,70 @@ const handleGenerate = async () => {
                     .eq('id', trainingId.value)
                     .single();
 
-                // Vérifier que le PDF existe ET que la formation a été mise à jour après le début de la génération
                 if (!error && data?.pdf_url && data?.updated_at) {
-                    const updatedAt = new Date(data.updated_at);
-                    const startTime = new Date(generationStartTime);
-                    // Le PDF est prêt seulement si updated_at est plus récent que le début de la génération
-                    if (updatedAt > startTime) {
+                    if (new Date(data.updated_at) > new Date(generationStartTime)) {
                         return data.pdf_url;
                     }
                 }
-            } catch (err) {
-                console.warn('Erreur lors du polling:', err);
-            }
+            } catch (err) { /* ignore */ }
             return null;
         };
 
         const startPolling = () => {
-            const maxAttempts = 20; // Max 80 secondes (20 * 4s)
             let attempts = 0;
-
             pollInterval = setInterval(async () => {
-                if (documentReady) {
-                    clearInterval(pollInterval);
-                    return;
-                }
-
+                if (documentReady) { clearInterval(pollInterval); return; }
                 attempts++;
-
-                const pdfUrlFromDb = await checkPdfReady();
-
-                if (pdfUrlFromDb) {
-                    // PDF trouvé !
+                const url = await checkPdfReady();
+                if (url) {
                     documentReady = true;
                     clearInterval(pollInterval);
                     clearInterval(progressInterval);
                     progressValue.value = 100;
-
-                    pdfUrl.value = pdfUrlFromDb;
+                    pdfUrl.value = url;
                     pdfTimestamp.value = Date.now();
-
-                    // Réinitialiser après une courte pause
-                    setTimeout(() => {
-                        submitting.value = false;
-                        progressValue.value = 0;
-                        progressTime.value = 0;
-                    }, 1000);
+                    setTimeout(() => { submitting.value = false; progressValue.value = 0; }, 1000);
                 }
-
-                // Si on a dépassé le nombre max de tentatives
-                if (attempts >= maxAttempts && !documentReady) {
+                if (attempts >= 20 && !documentReady) {
                     clearInterval(pollInterval);
                     clearInterval(progressInterval);
                     submitting.value = false;
                     progressValue.value = 0;
-                    progressTime.value = 0;
-                    alert('⏳ La génération prend plus de temps que prévu. Veuillez rafraîchir la page dans quelques instants.');
+                    alert('La génération prend plus de temps que prévu. Rafraîchissez la page.');
                 }
-            }, 4000); // Vérifier toutes les 4 secondes
+            }, 4000);
         };
 
-        // Démarrer le polling après 8 secondes
         setTimeout(startPolling, 8000);
 
-        // Attendre la promesse de génération
         const genResult = await generationPromise;
 
-        // Si la génération a réussi rapidement (avant le polling)
         if (genResult.success && !documentReady) {
             documentReady = true;
             if (pollInterval) clearInterval(pollInterval);
             clearInterval(progressInterval);
             progressValue.value = 100;
-
             pdfUrl.value = genResult.pdfUrl;
             pdfTimestamp.value = Date.now();
-
-            // Sauvegarder l'URL du PDF dans la base de données
             await trainingStore.saveTraining(form.value, trainingId.value, genResult.pdfUrl);
-
-            // Réinitialiser après une courte pause
-            setTimeout(() => {
-                submitting.value = false;
-                progressValue.value = 0;
-                progressTime.value = 0;
-            }, 1000);
-        }
-        // Si la génération a échoué rapidement
-        else if (!genResult.success && !documentReady) {
+            setTimeout(() => { submitting.value = false; progressValue.value = 0; }, 1000);
+        } else if (!genResult.success && !documentReady) {
             if (pollInterval) clearInterval(pollInterval);
             clearInterval(progressInterval);
             submitting.value = false;
             progressValue.value = 0;
-            progressTime.value = 0;
-
-            // Si erreur de timeout, laisser le polling continuer
             if (genResult.error && genResult.error.includes('trop de temps')) {
-                // Relancer le polling si pas encore démarré
-                if (!pollInterval) {
-                    startPolling();
-                }
-                // Sinon le polling continue
+                if (!pollInterval) startPolling();
             } else {
-                // Autre erreur : afficher
-                alert(t('training.error_gen') + genResult.error);
+                alert('Erreur génération : ' + genResult.error);
             }
         }
-
     } catch (error) {
         clearInterval(progressInterval);
         submitting.value = false;
         progressValue.value = 0;
-        progressTime.value = 0;
-        alert(t('training.error_gen') + error.message);
+        alert('Erreur : ' + error.message);
     }
-};
-
-const resetForm = () => {
-    confirm.require({
-        message: t('training.confirm_reset'),
-        header: 'Confirmation',
-        icon: 'pi pi-exclamation-triangle',
-        accept: () => {
-            pdfUrl.value = null;
-        }
-    });
 };
 
 const goBack = () => {
@@ -383,23 +264,8 @@ const goBack = () => {
             <Button :label="t('training.back')" text @click="goBack" />
         </div>
 
-        <!-- Erreur d'authentification -->
-        <div v-if="setupError" class="card bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm">
-            <div class="flex items-start gap-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                <i class="pi pi-exclamation-triangle text-2xl text-orange-500 mt-1"></i>
-                <div>
-                    <h3 class="font-bold text-orange-700 dark:text-orange-400 mb-2">Problème de connexion</h3>
-                    <p class="text-orange-600 dark:text-orange-300 text-sm">{{ setupError }}</p>
-                    <div class="mt-4 flex gap-2">
-                        <a href="/login" class="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">Se connecter</a>
-                        <Button label="Réessayer" icon="pi pi-refresh" severity="secondary" size="small" @click="$router.go(0)" />
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- État de chargement -->
-        <div v-else-if="formLoading" class="card bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm text-center">
+        <!-- Chargement (mode édition uniquement) -->
+        <div v-if="formLoading" class="card bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm text-center">
             <i class="pi pi-spin pi-spinner text-4xl text-blue-500 mb-4"></i>
             <p class="text-gray-600 dark:text-gray-300">Chargement de la formation...</p>
         </div>
@@ -413,12 +279,12 @@ const goBack = () => {
                     <p class="text-red-600 dark:text-red-300 text-sm">{{ loadError }}</p>
                     <div class="mt-4 flex gap-2">
                         <Button label="Retour au catalogue" icon="pi pi-arrow-left" severity="secondary" @click="goBack" />
-                        <Button label="Réessayer" icon="pi pi-refresh" @click="$router.go(0)" />
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- PDF généré -->
         <div v-else-if="pdfUrl" class="card bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-[80vh] flex flex-col">
             <div class="flex justify-between items-center mb-4">
                 <div class="flex items-center gap-2 text-green-600">
@@ -426,7 +292,7 @@ const goBack = () => {
                     <span class="font-bold">{{ t('training.success_doc') }}</span>
                 </div>
                 <div class="flex gap-2">
-                    <Button icon="pi pi-refresh" @click="refreshPdf" severity="secondary" size="small" v-tooltip.top="'Rafraîchir le PDF'" />
+                    <Button icon="pi pi-refresh" @click="refreshPdf" severity="secondary" size="small" />
                     <a :href="pdfUrlWithCache" target="_blank" rel="noopener">
                         <Button :label="t('training.download')" icon="pi pi-external-link" />
                     </a>
@@ -435,19 +301,20 @@ const goBack = () => {
             <iframe :src="pdfUrlWithCache" class="w-full flex-grow rounded border border-gray-200" title="Aperçu PDF"></iframe>
         </div>
 
+        <!-- FORMULAIRE DE CRÉATION -->
         <div v-else class="card bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm">
             <form @submit.prevent="handleGenerate" class="space-y-8">
-                
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="md:col-span-2">
                         <label class="font-semibold block mb-2">{{ t('training.fields.title') }}</label>
-                        <InputText v-model="form.titre" class="w-full text-lg" :placeholder="t('training.placeholders.title')" :invalid="!!errors.titre" @input="clearError('titre')" />
+                        <InputText v-model="form.titre" class="w-full text-lg" :placeholder="t('training.placeholders.title')" :invalid="titleError" @input="titleError = false" />
                     </div>
                     <div>
                         <label class="block mb-2">{{ t('training.fields.updated_at') }}</label>
                         <Calendar v-model="form.maj" dateFormat="dd/mm/yy" showIcon class="w-full" />
                     </div>
-                     <div>
+                    <div>
                         <label class="block mb-2">{{ t('training.fields.location') }}</label>
                         <InputText v-model="form.lieu" class="w-full" :placeholder="t('training.placeholders.location')" />
                     </div>
@@ -465,23 +332,15 @@ const goBack = () => {
                     <div>
                         <label class="block mb-2 text-sm">{{ t('training.fields.dates') }}</label>
                         <div class="flex gap-2">
-                            <div class="flex-1">
-                                <Calendar v-model="form.dates" dateFormat="dd/mm/yy" showIcon placeholder="Début" class="w-full" />
-                            </div>
-                            <div class="flex-1">
-                                <Calendar v-model="form.dates_fin" dateFormat="dd/mm/yy" showIcon placeholder="Fin" class="w-full" />
-                            </div>
+                            <Calendar v-model="form.dates" dateFormat="dd/mm/yy" showIcon placeholder="Début" class="w-full flex-1" />
+                            <Calendar v-model="form.dates_fin" dateFormat="dd/mm/yy" showIcon placeholder="Fin" class="w-full flex-1" />
                         </div>
                     </div>
                     <div>
                         <label class="block mb-2 text-sm">{{ t('training.fields.schedule') }}</label>
                         <div class="flex gap-2">
-                            <div class="flex-1">
-                                <Calendar v-model="form.horaires_debut" timeOnly hourFormat="24" placeholder="Début" class="w-full" />
-                            </div>
-                            <div class="flex-1">
-                                <Calendar v-model="form.horaires_fin" timeOnly hourFormat="24" placeholder="Fin" class="w-full" />
-                            </div>
+                            <Calendar v-model="form.horaires_debut" timeOnly hourFormat="24" placeholder="Début" class="w-full flex-1" />
+                            <Calendar v-model="form.horaires_fin" timeOnly hourFormat="24" placeholder="Fin" class="w-full flex-1" />
                         </div>
                     </div>
                     <div class="md:col-span-2">
@@ -535,12 +394,8 @@ const goBack = () => {
                     </div>
                 </div>
 
-                <!-- ================================================ -->
-                <!-- Section CDC — Cahier des charges (bordure bleue) -->
-                <!-- ================================================ -->
                 <div class="border-l-4 border-blue-500 pl-6 py-4 space-y-6 bg-blue-50/40 dark:bg-blue-900/10 rounded-r-lg">
                     <h2 class="text-lg font-bold text-blue-700 dark:text-blue-300 mb-2">Cahier des charges (CDC)</h2>
-
                     <div>
                         <label class="font-semibold block mb-2">Public visé</label>
                         <Textarea v-model="form.public_cible" rows="3" class="w-full" placeholder="Décrivez le public cible de la formation" />
@@ -587,7 +442,6 @@ const goBack = () => {
                         />
                     </div>
 
-                    <!-- Barre de progression -->
                     <div v-if="submitting" class="mt-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
                         <div class="flex justify-between items-center mb-2">
                             <span class="text-sm text-gray-600 dark:text-gray-300">Génération en cours...</span>
