@@ -33,3 +33,5 @@ dist-ssr
 #dev
 npm run dev
 npx wrangler pages dev --proxy 5173
+.vercel
+.env*.local

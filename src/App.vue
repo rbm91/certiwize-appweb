@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router';
 import Navbar from './components/Navbar.vue';
 import ChatWidget from './components/ChatWidget.vue';
 import Toast from 'primevue/toast';
+import ConfirmDialog from 'primevue/confirmdialog';
 import { useAuthStore } from './stores/auth';
 
 const authStore = useAuthStore();
@@ -71,6 +72,7 @@ onUnmounted(() => {
     </main>
 
     <Toast />
+    <ConfirmDialog />
 
     <ChatWidget />
   </div>
