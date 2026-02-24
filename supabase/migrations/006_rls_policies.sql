@@ -26,10 +26,10 @@ DROP POLICY IF EXISTS "tiers_select" ON tiers;
 DROP POLICY IF EXISTS "tiers_insert" ON tiers;
 DROP POLICY IF EXISTS "tiers_update" ON tiers;
 DROP POLICY IF EXISTS "tiers_delete" ON tiers;
-CREATE POLICY "tiers_select" ON tiers FOR SELECT USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
-CREATE POLICY "tiers_insert" ON tiers FOR INSERT WITH CHECK (organization_id IN (SELECT get_user_org_ids()));
-CREATE POLICY "tiers_update" ON tiers FOR UPDATE USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
-CREATE POLICY "tiers_delete" ON tiers FOR DELETE USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
+CREATE POLICY "tiers_select" ON tiers FOR SELECT USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
+CREATE POLICY "tiers_insert" ON tiers FOR INSERT WITH CHECK (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid());
+CREATE POLICY "tiers_update" ON tiers FOR UPDATE USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
+CREATE POLICY "tiers_delete" ON tiers FOR DELETE USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
 
 -- ── PRESTATIONS ──
 ALTER TABLE prestations ENABLE ROW LEVEL SECURITY;
@@ -70,10 +70,10 @@ DROP POLICY IF EXISTS "companies_select" ON companies;
 DROP POLICY IF EXISTS "companies_insert" ON companies;
 DROP POLICY IF EXISTS "companies_update" ON companies;
 DROP POLICY IF EXISTS "companies_delete" ON companies;
-CREATE POLICY "companies_select" ON companies FOR SELECT USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
-CREATE POLICY "companies_insert" ON companies FOR INSERT WITH CHECK (organization_id IN (SELECT get_user_org_ids()));
-CREATE POLICY "companies_update" ON companies FOR UPDATE USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
-CREATE POLICY "companies_delete" ON companies FOR DELETE USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
+CREATE POLICY "companies_select" ON companies FOR SELECT USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
+CREATE POLICY "companies_insert" ON companies FOR INSERT WITH CHECK (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid());
+CREATE POLICY "companies_update" ON companies FOR UPDATE USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
+CREATE POLICY "companies_delete" ON companies FOR DELETE USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
 
 -- ── APPELS (a bien organization_id) ──
 ALTER TABLE appels ENABLE ROW LEVEL SECURITY;
@@ -179,7 +179,7 @@ DROP POLICY IF EXISTS "org_members_select" ON organization_members;
 DROP POLICY IF EXISTS "org_members_insert" ON organization_members;
 DROP POLICY IF EXISTS "org_members_delete" ON organization_members;
 CREATE POLICY "org_members_select" ON organization_members FOR SELECT USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
-CREATE POLICY "org_members_insert" ON organization_members FOR INSERT WITH CHECK (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
+CREATE POLICY "org_members_insert" ON organization_members FOR INSERT WITH CHECK (user_id = auth.uid() OR organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
 CREATE POLICY "org_members_delete" ON organization_members FOR DELETE USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
 
 
@@ -188,26 +188,28 @@ CREATE POLICY "org_members_delete" ON organization_members FOR DELETE USING (org
 -- ══════════════════════════════════════════════════════════════
 
 -- ── FORMATIONS (organization_id ajouté par migration 2026-02-22) ──
+-- Fallback user_id pour les utilisateurs legacy sans organisation
 ALTER TABLE formations ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "formations_select" ON formations;
 DROP POLICY IF EXISTS "formations_insert" ON formations;
 DROP POLICY IF EXISTS "formations_update" ON formations;
 DROP POLICY IF EXISTS "formations_delete" ON formations;
-CREATE POLICY "formations_select" ON formations FOR SELECT USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
-CREATE POLICY "formations_insert" ON formations FOR INSERT WITH CHECK (organization_id IN (SELECT get_user_org_ids()));
-CREATE POLICY "formations_update" ON formations FOR UPDATE USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
-CREATE POLICY "formations_delete" ON formations FOR DELETE USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
+CREATE POLICY "formations_select" ON formations FOR SELECT USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
+CREATE POLICY "formations_insert" ON formations FOR INSERT WITH CHECK (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid());
+CREATE POLICY "formations_update" ON formations FOR UPDATE USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
+CREATE POLICY "formations_delete" ON formations FOR DELETE USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
 
 -- ── PROJECTS (organization_id ajouté par migration 2026-02-22) ──
+-- Fallback user_id pour les utilisateurs legacy sans organisation
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "projects_select" ON projects;
 DROP POLICY IF EXISTS "projects_insert" ON projects;
 DROP POLICY IF EXISTS "projects_update" ON projects;
 DROP POLICY IF EXISTS "projects_delete" ON projects;
-CREATE POLICY "projects_select" ON projects FOR SELECT USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
-CREATE POLICY "projects_insert" ON projects FOR INSERT WITH CHECK (organization_id IN (SELECT get_user_org_ids()));
-CREATE POLICY "projects_update" ON projects FOR UPDATE USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
-CREATE POLICY "projects_delete" ON projects FOR DELETE USING (organization_id IN (SELECT get_user_org_ids()) OR is_super_admin());
+CREATE POLICY "projects_select" ON projects FOR SELECT USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
+CREATE POLICY "projects_insert" ON projects FOR INSERT WITH CHECK (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid());
+CREATE POLICY "projects_update" ON projects FOR UPDATE USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
+CREATE POLICY "projects_delete" ON projects FOR DELETE USING (organization_id IN (SELECT get_user_org_ids()) OR user_id = auth.uid() OR is_super_admin());
 
 -- ── ANALYSIS_HISTORY (user_id uniquement) ──
 ALTER TABLE analysis_history ENABLE ROW LEVEL SECURITY;
