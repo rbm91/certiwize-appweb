@@ -126,23 +126,20 @@ export const useTrainingStore = defineStore('training', () => {
             let result;
 
             if (id) {
-                // Mise à jour
-                let updateQuery = supabase.from('formations').update(payload).eq('id', id);
-                if (orgId) {
-                    updateQuery = updateQuery.eq('organization_id', orgId);
-                }
-                result = await updateQuery.select().maybeSingle();
+                // Mise à jour — essayer avec org_id d'abord, puis sans
+                result = await supabase.from('formations').update(payload).eq('id', id).select().maybeSingle();
 
-                // Si ça échoue avec org_id, réessayer sans
-                if (result.error && orgId) {
-                    console.warn('[TrainingStore] Update with org_id failed, retrying without:', result.error.message);
+                // Si erreur OU aucune ligne matchée (data null), réessayer sans org_id
+                if ((result.error || !result.data) && orgId) {
+                    console.warn('[TrainingStore] Update returned no data, retrying without org_id filter');
+                    delete payload.organization_id;
                     result = await supabase.from('formations').update(payload).eq('id', id).select().maybeSingle();
                 }
             } else {
                 // Création
                 result = await supabase.from('formations').insert([payload]).select().single();
 
-                // Si ça échoue (probablement organization_id qui n'existe pas), réessayer sans
+                // Si ça échoue, réessayer sans organization_id
                 if (result.error && orgId) {
                     console.warn('[TrainingStore] Insert with org_id failed, retrying without:', result.error.message);
                     delete payload.organization_id;
