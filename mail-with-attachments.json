@@ -1,0 +1,370 @@
+{
+  "name": "Mail avec pièces jointes",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "71559303-aaa0-4afd-83c9-69302eaf22a4",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -784,
+        -144
+      ],
+      "id": "2c0a1617-ab15-4107-8d1c-f796e1215b2c",
+      "name": "Webhook",
+      "webhookId": "71559303-aaa0-4afd-83c9-69302eaf22a4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraire les informations du webhook\nconst body = $input.first().json.body;\nconst learner = body.learner;\nconst project = body.project;\n\n// Gérer doc_type (singulier) ET doc_types (pluriel)\nlet docTypes = body.doc_types || [];\nif (body.doc_type) {\n  docTypes = [body.doc_type];\n}\nconst quizLinks = body.quiz_links || {};\n\n// Construire la liste des documents à télécharger\nconst documentsToDownload = [];\n\n// Mapping des types de documents vers les champs du projet\nconst docFieldMap = {\n  'livret': 'livret',\n  'convocation': 'convocation',\n  'convention': 'convention'\n};\n\n// Documents statiques stockés dans Supabase Storage (bucket static-docs)\nconst SUPABASE_URL = 'https://ivlofqlskkwpezktpavy.supabase.co';\nconst staticDocMap = {\n  'satisfaction_survey': `${SUPABASE_URL}/storage/v1/object/public/static-docs/questionnaire_satisfaction_stagiaire.pptx`\n};\n\n// Ajouter les documents du projet (livret, convocation, convention)\nfor (const docType of docTypes) {\n  const fieldName = docFieldMap[docType];\n  if (fieldName && project && project[fieldName]) {\n    documentsToDownload.push({\n      type: docType,\n      url: project[fieldName],\n      filename: `${docType}_${learner.last_name}_${learner.first_name}.pdf`\n    });\n  }\n}\n\n// Ajouter les documents statiques (satisfaction_survey, completion_certificate)\nfor (const docType of docTypes) {\n  if (staticDocMap[docType]) {\n    const ext = staticDocMap[docType].split('.').pop();\n    documentsToDownload.push({\n      type: docType,\n      url: staticDocMap[docType],\n      filename: `${docType}_${learner.last_name}_${learner.first_name}.${ext}`\n    });\n  }\n}\n\n// Construire le contenu de l'email\nlet emailBody = `<h2>Bonjour ${learner.first_name} ${learner.last_name},</h2>`;\nemailBody += `<p>Veuillez trouver ci-joint vos documents de formation.</p>`;\n\n// Ajouter les liens des quiz si présents\nconst quizTypes = ['positioning_quiz', 'evaluation_quiz', 'satisfaction_survey'];\nconst quizLabels = {\n  'positioning_quiz': 'Quiz de positionnement',\n  'evaluation_quiz': \"Quiz d'évaluation\",\n  'satisfaction_survey': 'Enquête de satisfaction'\n};\n\nlet hasQuizLinks = false;\nfor (const quizType of quizTypes) {\n  if (docTypes.includes(quizType) && quizLinks[quizType]) {\n    if (!hasQuizLinks) {\n      emailBody += `<h3>Liens vers vos questionnaires :</h3><ul>`;\n      hasQuizLinks = true;\n    }\n    emailBody += `<li><a href=\"${quizLinks[quizType]}\">${quizLabels[quizType]}</a></li>`;\n  }\n}\nif (hasQuizLinks) {\n  emailBody += `</ul>`;\n}\n\nemailBody += `<p>Cordialement,<br>L'équipe Certiwize</p>`;\n\nconst fromEmail = body.from_email || 'noreply@certiwize.com';\n\nreturn {\n  learner,\n  documentsToDownload,\n  emailBody,\n  fromEmail,\n  hasDocuments: documentsToDownload.length > 0\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        -144
+      ],
+      "id": "5bb11195-44d1-43b4-83f5-094e925694ff",
+      "name": "Extraire URLs documents"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "condition-has-docs",
+              "leftValue": "={{ $json.hasDocuments }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -352,
+        -144
+      ],
+      "id": "64dab5a4-f2fc-4a88-bea2-98eb9e5002bb",
+      "name": "A des documents?"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "documentsToDownload",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        -240
+      ],
+      "id": "d9ef1e07-fdc7-49b2-be90-ad3df48aa722",
+      "name": "Split documents"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        96,
+        -240
+      ],
+      "id": "61088fdd-2206-4667-8dbc-35ee2b1e1610",
+      "name": "Télécharger PDF"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Récupérer tous les items avec leurs binaires\nconst items = $input.all();\n\n// Récupérer les données depuis le noeud source (avant le split)\nconst sourceData = $('Extraire URLs documents').first().json;\nconst learner = sourceData.learner;\nconst emailBody = sourceData.emailBody;\nconst fromEmail = sourceData.fromEmail || 'noreply@certiwize.com';\n\n// Créer un nouvel item avec toutes les données binaires combinées\nconst newItem = {\n  json: {\n    learner,\n    emailBody,\n    fromEmail,\n    attachmentCount: items.length\n  },\n  binary: {}\n};\n\n// Combiner tous les binaires avec des noms uniques\nconst attachmentNames = [];\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  if (item.binary && item.binary.data) {\n    const attachmentName = `attachment_${i}`;\n    newItem.binary[attachmentName] = item.binary.data;\n    attachmentNames.push(attachmentName);\n  }\n}\n\n// Stocker la liste des noms pour le noeud Email\nnewItem.json.attachmentNames = attachmentNames.join(',');\n\nreturn [newItem];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -240
+      ],
+      "id": "866cfe08-9384-49f5-bdec-5babc6fdfa8b",
+      "name": "Combiner fichiers"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.fromEmail }}",
+        "toEmail": "={{ $json.learner.email }}",
+        "subject": "Vos documents de formation - Certiwize",
+        "html": "={{ $json.emailBody }}",
+        "options": {
+          "appendAttribution": false,
+          "attachments": "={{ $json.attachmentNames }}"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        544,
+        -240
+      ],
+      "id": "bbdf63f6-b9a8-44b2-8f7c-5ab0b1c26a81",
+      "name": "Envoyer email (avec PJ)",
+      "webhookId": "dd2feab4-4083-42f1-a195-2d1744760eac",
+      "credentials": {
+        "smtp": {
+          "id": "q5yRYH753O4SkzTq",
+          "name": "Noreply certiwize"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.fromEmail }}",
+        "toEmail": "={{ $json.learner.email }}",
+        "subject": "Vos documents de formation - Certiwize",
+        "html": "={{ $json.emailBody }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -128,
+        -48
+      ],
+      "id": "b095472c-5f8f-43c6-b13e-e912b1bd1952",
+      "name": "Envoyer email (sans PJ)",
+      "webhookId": "61ef1dcf-0606-403f-82fd-d59b24f31552",
+      "credentials": {
+        "smtp": {
+          "id": "q5yRYH753O4SkzTq",
+          "name": "Noreply certiwize"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        752,
+        -144
+      ],
+      "id": "7edef45d-778a-4d0f-b21d-77c7dbdea0b3",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv795917.hstgr.cloud",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+            "content-length": "1228",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "fr-FR,fr;q=0.6",
+            "content-type": "application/json",
+            "origin": "http://localhost:8788",
+            "priority": "u=1, i",
+            "referer": "http://localhost:8788/",
+            "sec-ch-ua": "\"Not(A:Brand\";v=\"8\", \"Chromium\";v=\"144\", \"Brave\";v=\"144\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "sec-gpc": "1",
+            "x-forwarded-for": "172.18.0.1",
+            "x-forwarded-host": "n8n.srv795917.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "076625024bce",
+            "x-real-ip": "172.18.0.1"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "learner": {
+              "id": "4b493616-d57c-4249-a961-603f8bf768a0",
+              "first_name": "TEST",
+              "last_name": "test",
+              "email": "salahsama.slh@gmail.com",
+              "phone": "0689125623"
+            },
+            "doc_types": [
+              "livret",
+              "convocation",
+              "satisfaction_survey",
+              "completion_certificate",
+              "positioning_quiz",
+              "evaluation_quiz"
+            ],
+            "from_email": "noreply@certiwize.com",
+            "send_all": true,
+            "project": {
+              "id": "cdb22cd9-b2ac-4a5a-a813-50cfd9ae8e5e",
+              "name": "Projet ZAE",
+              "livret": "https://ivlofqlskkwpezktpavy.supabase.co/storage/v1/object/public/project-docs/livret/1JamVtcWBYugH75zZitRF9UHmz_BHaAJppG_2vYj0XOw.pdf",
+              "convention": "https://ivlofqlskkwpezktpavy.supabase.co/storage/v1/object/public/project-docs/convention/1Zy3TlYVg4_LD214kWkZ8-wZi7CWfqGX9LTVroa8wFOc.pdf",
+              "convocation": "https://ivlofqlskkwpezktpavy.supabase.co/storage/v1/object/public/project-docs/convocation/1xL5gSv7Ts_1T8PLoc-Ltwhet673__wyfKiQ48pBaAe4.pdf"
+            },
+            "tier": {
+              "name": "Rubby NTS"
+            },
+            "document_ids": [
+              "6b0b2d64-cee7-4e4c-be2f-69b2d22abdf1",
+              "d94a282e-78a6-48f1-a71f-a9d6b2376107",
+              "2c9a6ec5-ffc0-4002-9942-caa9f97161b8",
+              "8dfaa8c0-0e19-4f5f-a1fc-86bd1a63aef5",
+              "18838495-f29b-41fe-a7c1-a291051b944b",
+              "f64b07ba-f6e1-439a-a6b0-59d0af3afb52"
+            ],
+            "quiz_links": {
+              "positioning_quiz": "https://forms.google.com/positioning",
+              "evaluation_quiz": "https://forms.google.com/evaluation"
+            }
+          },
+          "webhookUrl": "https://n8n.srv795917.hstgr.cloud/webhook/71559303-aaa0-4afd-83c9-69302eaf22a4",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extraire URLs documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire URLs documents": {
+      "main": [
+        [
+          {
+            "node": "A des documents?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A des documents?": {
+      "main": [
+        [
+          {
+            "node": "Split documents",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Envoyer email (sans PJ)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split documents": {
+      "main": [
+        [
+          {
+            "node": "Télécharger PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Télécharger PDF": {
+      "main": [
+        [
+          {
+            "node": "Combiner fichiers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combiner fichiers": {
+      "main": [
+        [
+          {
+            "node": "Envoyer email (avec PJ)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer email (avec PJ)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer email (sans PJ)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "c769424a-6f67-4c62-80e4-677fca5f8061",
+  "meta": {
+    "instanceId": "c9764476afcc8a325abad981c7114c49790f1c961bf96260907facae9c69f65f"
+  },
+  "id": "0wlkdIcANAVayrSw",
+  "tags": []
+}

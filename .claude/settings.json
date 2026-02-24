@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__n8n__search_nodes",
+      "mcp__n8n__get_node"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "primeicons/primeicons.css";
+
+@theme {
+  --color-primary: #71ae54;
+  --color-primary-dark: #5a8c43;
+}
+
+/* Configuration du mode sombre pour Tailwind CSS v4 */
+@variant dark (&:where(.dark, .dark *));
+
+/* Indication du mode couleur pour le navigateur */
+:root {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
+}
