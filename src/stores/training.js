@@ -9,24 +9,25 @@ export const useTrainingStore = defineStore('training', () => {
     const formations = ref([]);
     const auth = useAuthStore();
 
-    // Récupérer les formations (filtrées par user_id sauf si admin)
+    // Récupérer les formations — compatible avec ou sans organisation
     const fetchFormations = async () => {
-        if (!auth.currentOrganization?.id && !auth.isSuperAdmin) {
-            loading.value = false;
-            return;
-        }
-
         loading.value = true;
         try {
-            const orgId = auth.currentOrganization?.id;
-
             let query = supabase
                 .from('formations')
                 .select('*, profiles(email)')
                 .order('updated_at', { ascending: false });
 
-            if (!auth.isSuperAdmin) {
+            const orgId = auth.currentOrganization?.id;
+
+            if (auth.isSuperAdmin) {
+                // Super admin voit tout
+            } else if (orgId) {
+                // Filtrer par organisation
                 query = query.eq('organization_id', orgId);
+            } else {
+                // Fallback : filtrer par user_id (compte sans organisation)
+                query = query.eq('user_id', auth.user?.id);
             }
 
             const { data, error: err } = await query;
@@ -36,7 +37,6 @@ export const useTrainingStore = defineStore('training', () => {
         } catch (err) {
             console.error('[TrainingStore] Error fetching formations:', err);
             formations.value = [];
-            throw err;
         } finally {
             loading.value = false;
         }
@@ -47,12 +47,17 @@ export const useTrainingStore = defineStore('training', () => {
         loading.value = true;
         try {
             const payload = {
-                organization_id: auth.currentOrganization?.id,
                 user_id: auth.user.id,
                 title: trainingData.titre || 'Nouvelle Formation',
                 content: trainingData, // Tout le formulaire
                 updated_at: new Date()
             };
+
+            // Ajouter organization_id seulement si disponible
+            const orgId = auth.currentOrganization?.id;
+            if (orgId) {
+                payload.organization_id = orgId;
+            }
 
             // Ajouter l'URL du PDF si fournie
             if (pdfUrl) {
@@ -63,9 +68,12 @@ export const useTrainingStore = defineStore('training', () => {
             let result;
 
             if (id) {
-                // Filtre par organization_id pour éviter les modifications cross-tenant
-                const orgId = auth.currentOrganization?.id;
-                result = await query.update(payload).eq('id', id).eq('organization_id', orgId).select().single();
+                // Mise à jour — filtrer par org si disponible
+                let updateQuery = query.update(payload).eq('id', id);
+                if (orgId) {
+                    updateQuery = updateQuery.eq('organization_id', orgId);
+                }
+                result = await updateQuery.select().single();
             } else {
                 result = await query.insert([payload]).select().single();
             }
@@ -83,22 +91,27 @@ export const useTrainingStore = defineStore('training', () => {
         }
     };
 
-    // Supprimer une formation — filtré par organisation
+    // Supprimer une formation — compatible avec ou sans organisation
     const deleteFormation = async (id) => {
         try {
-            const orgId = auth.currentOrganization?.id;
-            if (!orgId) throw new Error('Aucune organisation sélectionnée');
-
-            const { error: err } = await supabase
+            let query = supabase
                 .from('formations')
                 .delete()
-                .eq('id', id)
-                .eq('organization_id', orgId);
+                .eq('id', id);
+
+            // Ajouter le filtre org si disponible
+            const orgId = auth.currentOrganization?.id;
+            if (orgId) {
+                query = query.eq('organization_id', orgId);
+            }
+
+            const { error: err } = await query;
 
             if (err) throw err;
 
             formations.value = formations.value.filter(f => f.id !== id);
         } catch (err) {
+            console.error('[TrainingStore] Error deleting formation:', err);
             throw new Error("Impossible de supprimer cette formation.");
         }
     };

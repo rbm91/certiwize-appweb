@@ -79,6 +79,74 @@ export const useAuthStore = defineStore('auth', () => {
         role: m.role,
       }));
 
+      // ── Auto-création d'organisation pour les comptes existants (migration) ──
+      if (organizations.value.length === 0 && userId) {
+        console.log('[AuthStore] No organization found, auto-creating one for legacy user...');
+        try {
+          const userName = user.value?.user_metadata?.full_name
+            || user.value?.email?.split('@')[0]
+            || 'Mon Organisation';
+
+          const slug = userName
+            .toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            + '-' + Date.now().toString(36);
+
+          // Créer l'organisation
+          const { data: org, error: orgErr } = await supabase
+            .from('organizations')
+            .insert({ name: userName, slug })
+            .select()
+            .single();
+
+          if (orgErr) {
+            console.error('[AuthStore] Auto-create org failed:', orgErr);
+          } else if (org) {
+            // Créer le membership owner
+            const { error: memberErr } = await supabase
+              .from('organization_members')
+              .insert({
+                organization_id: org.id,
+                user_id: userId,
+                role: 'owner',
+              });
+
+            if (memberErr) {
+              console.error('[AuthStore] Auto-create membership failed:', memberErr);
+            } else {
+              organizations.value = [{
+                id: org.id,
+                name: org.name,
+                slug: org.slug,
+                role: 'owner'
+              }];
+
+              // Migrer les données existantes vers la nouvelle org
+              console.log('[AuthStore] Migrating existing data to new organization...');
+              const tables = ['formations', 'tiers', 'projects', 'companies'];
+              for (const table of tables) {
+                try {
+                  await supabase
+                    .from(table)
+                    .update({ organization_id: org.id })
+                    .eq('user_id', userId)
+                    .is('organization_id', null);
+                } catch (e) {
+                  // Ignorer les erreurs (table n'existe peut-être pas encore)
+                  console.warn(`[AuthStore] Migration ${table}:`, e.message);
+                }
+              }
+              console.log('[AuthStore] Migration complete');
+            }
+          }
+        } catch (autoCreateErr) {
+          console.warn('[AuthStore] Auto-create organization failed:', autoCreateErr);
+          // Continue sans organisation — le fallback user_id dans les stores gère ce cas
+        }
+      }
+
       // Si pas d'org courante, sélectionner la première
       if (organizations.value.length > 0 && !currentOrganization.value) {
         await setCurrentOrganization(organizations.value[0].id);
