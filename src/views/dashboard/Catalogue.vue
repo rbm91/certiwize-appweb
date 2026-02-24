@@ -23,9 +23,10 @@ const props = defineProps({
 const router = useRouter();
 const trainingStore = useTrainingStore();
 const authStore = useAuthStore();
-const { formations, loading } = storeToRefs(trainingStore);
+const { formations, loading, error: storeError } = storeToRefs(trainingStore);
 
 const showSlowLoading = ref(false);
+const loadErrorMsg = ref(null);
 
 // Active tab index: 0 = formations, 1 = missions
 const activeTab = ref(props.tab === 'missions' ? 1 : 0);
@@ -107,6 +108,7 @@ const missionTypeSeverity = (type) => {
 onMounted(async () => {
   loading.value = true;
   showSlowLoading.value = false;
+  loadErrorMsg.value = null;
 
   const slowTimer = setTimeout(() => {
     if (loading.value) {
@@ -116,6 +118,11 @@ onMounted(async () => {
 
   try {
     await trainingStore.fetchFormations();
+    if (storeError.value) {
+      loadErrorMsg.value = storeError.value;
+    }
+  } catch (err) {
+    loadErrorMsg.value = err.message || 'Erreur de chargement';
   } finally {
     clearTimeout(slowTimer);
     showSlowLoading.value = false;
@@ -129,6 +136,16 @@ onMounted(async () => {
 
     <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
       <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Catalogue</h1>
+    </div>
+
+    <!-- Erreur de chargement -->
+    <div v-if="loadErrorMsg" class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+      <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+        <i class="pi pi-exclamation-triangle"></i>
+        <span class="font-semibold">Erreur de chargement</span>
+      </div>
+      <p class="text-sm text-red-600 dark:text-red-300 mt-1">{{ loadErrorMsg }}</p>
+      <Button label="Réessayer" icon="pi pi-refresh" severity="danger" size="small" class="mt-2" @click="trainingStore.fetchFormations()" />
     </div>
 
     <TabView v-model:activeIndex="activeTab">
