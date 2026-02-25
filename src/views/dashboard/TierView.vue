@@ -537,12 +537,6 @@ onMounted(async () => {
                   </span>
                 </div>
                 <div>
-                  <span class="text-sm text-gray-500 block">Date signature NDA</span>
-                  <span :class="tier.nda_date_signature ? 'font-medium' : 'text-gray-300 italic'">
-                    {{ tier.nda_date_signature ? formatDateShort(tier.nda_date_signature) : 'Non renseigné' }}
-                  </span>
-                </div>
-                <div>
                   <span class="text-sm text-gray-500 block">Déclaration d'activité</span>
                   <span :class="tier.declaration_activite ? 'font-medium' : 'text-gray-300 italic'">
                     {{ tier.declaration_activite || 'Non renseigné' }}

@@ -82,7 +82,8 @@
     "audit_blanc": "Audit blanc",
     "elearning": "E-learning",
     "parrainage": "Parrainage",
-    "gdpr_settings": "RGPD"
+    "gdpr_settings": "RGPD",
+    "subscription": "Mon abonnement"
   },
   "manual": {
     "title": "Manuel Qualité & Outils",
@@ -453,7 +454,7 @@
     "title": "Mot de passe oublié",
     "email": "Votre Email",
     "submit": "Envoyer le lien",
-    "success": "vous recevrez un lien de réinitialisation.",
+    "success": "Si vous avez un compte, vous allez recevoir un lien de réinitialisation.",
     "back_to_login": "Retour à la connexion"
   },
   "update_password": {
@@ -1132,14 +1133,17 @@
       "last_name": "Nom de famille",
       "last_name_placeholder": "Dupont",
       "company": "Nom de l'entreprise",
-      "company_placeholder": "Mon Organisme de Formation",
+      "company_placeholder": "Mon organisme de formation",
       "tax_id": "Numéro d'identification fiscale",
-      "tax_id_placeholder": "SIRET ou numéro TVA",
+      "tax_id_placeholder": "Numéro TVA intracommunautaire",
       "email": "Email",
       "email_placeholder": "jean.dupont{'@'}entreprise.fr",
       "email_helper": "Vous recevrez vos identifiants de connexion à cette adresse",
       "phone": "Numéro de téléphone",
-      "phone_placeholder": "06 12 34 56 78",
+      "phone_placeholder": "06-12-34-56-78",
+      "referral_code": "Code de parrainage",
+      "referral_code_placeholder": "Entrez votre code",
+      "referral_verify": "Vérifier",
       "payment_title": "Informations de paiement",
       "card": "Carte de crédit",
       "card_number": "1234 1234 1234 1234",
@@ -1163,9 +1167,17 @@
     },
     "error": "Une erreur est survenue. Veuillez réessayer.",
     "validation": {
-      "required_fields": "Veuillez remplir tous les champs obligatoires."
+      "required_fields": "Veuillez remplir tous les champs obligatoires.",
+      "invalid_email": "Adresse email invalide.",
+      "invalid_phone": "Numéro de téléphone invalide (format attendu : 06-12-34-56-78).",
+      "invalid_referral": "Le code de parrainage est invalide. Veuillez le vérifier."
     },
-    "loading": "Redirection vers le paiement..."
+    "loading": "Redirection vers le paiement...",
+    "referral": {
+      "valid": "Code de parrainage valide !",
+      "invalid": "Code de parrainage invalide.",
+      "accepted": "Code de parrainage enregistré."
+    }
   },
   "checkout_success": {
     "title": "Paiement réussi !",
@@ -1178,7 +1190,48 @@
     "manual_login": "Votre compte a été créé. Cliquez ci-dessous pour vous connecter.",
     "go_to_login": "Me connecter",
     "session_lost": "Votre session a expiré. Votre paiement a bien été enregistré — consultez vos emails pour vous connecter.",
-    "error": "Une erreur est survenue lors de la finalisation. Votre paiement a été reçu. Contactez-nous à contact{'@'}certiwize.com"
+    "error": "Une erreur est survenue lors de la finalisation. Votre paiement a été reçu. Contactez-nous à contact{'@'}certiwize.com",
+    "summary_title": "Récapitulatif de votre commande",
+    "summary_plan": "Formule",
+    "summary_price": "Montant",
+    "summary_client": "Client",
+    "summary_company": "Entreprise",
+    "summary_email": "Email",
+    "summary_payment": "Paiement",
+    "summary_sepa": "Prélèvement SEPA",
+    "plan_monthly": "Certigestion — Mensuel",
+    "plan_yearly": "Certigestion — Annuel",
+    "guarantee_title": "Garantie satisfait ou remboursé",
+    "guarantee_text": "Vous disposez de 30 jours pour tester la plateforme. Si vous n'êtes pas satisfait, un simple email suffit pour obtenir un remboursement intégral.",
+    "email_notice": "Un email de confirmation a été envoyé à votre adresse. Vous y trouverez vos identifiants de connexion et toutes les informations pour démarrer."
+  },
+  "subscription": {
+    "title": "Mon abonnement",
+    "subtitle": "Gérez votre abonnement Certigestion",
+    "loading": "Chargement de votre abonnement...",
+    "no_subscription": "Aucun abonnement actif",
+    "no_subscription_desc": "Vous n'avez pas encore d'abonnement. Découvrez nos offres pour commencer.",
+    "see_pricing": "Voir les tarifs",
+    "plan_label": "Formule",
+    "plan_monthly": "Certigestion — Mensuel",
+    "plan_yearly": "Certigestion — Annuel",
+    "status_label": "Statut",
+    "status_active": "Actif",
+    "status_cancelled": "Annulé",
+    "status_pending": "En attente",
+    "amount_label": "Montant",
+    "per_month": "/mois",
+    "per_year": "/an",
+    "started_label": "Début",
+    "renewal_label": "Prochain renouvellement",
+    "payment_method": "Mode de paiement",
+    "sepa_direct_debit": "Prélèvement SEPA (GoCardless)",
+    "billing_info": "Informations de facturation",
+    "cancel_title": "Annuler mon abonnement",
+    "cancel_confirm": "Êtes-vous sûr de vouloir annuler votre abonnement ? Vous conserverez l'accès jusqu'à la fin de la période en cours.",
+    "cancel_btn": "Annuler l'abonnement",
+    "cancel_success": "Votre abonnement a été annulé. Vous conservez l'accès jusqu'au {date}.",
+    "cancel_error": "Erreur lors de l'annulation. Contactez-nous à contact{'@'}certiwize.com"
   },
   "schedule": {
     "title": "Planifier une démo",

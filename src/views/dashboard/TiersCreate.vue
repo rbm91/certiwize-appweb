@@ -578,10 +578,6 @@ onMounted(async () => {
               </div>
             </div>
             <div v-if="form.nda_signe" class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Date de signature NDA</label>
-              <DatePicker v-model="form.nda_date_signature" dateFormat="dd/mm/yy" showIcon placeholder="jj/mm/aaaa" />
-            </div>
-            <div v-if="form.nda_signe" class="flex flex-col gap-2">
               <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Document NDA</label>
               <FileUpload
                 mode="basic"

@@ -246,8 +246,8 @@ const finishProject = (id) => {
       </div>
     </div>
 
-    <DataTable :value="filteredProjects" :loading="loading" paginator :rows="10" 
-               tableStyle="min-width: 50rem" dataKey="id">
+    <DataTable :value="filteredProjects" :loading="loading" paginator :rows="10"
+               dataKey="id">
       
       <template #empty>{{ t('project_list.empty') }}</template>
       <template #loading>{{ t('project_list.loading') }}</template>

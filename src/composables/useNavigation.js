@@ -102,6 +102,7 @@ const fixedSideNavItems = [
       { name: 'doc_types_settings', href: '/dashboard/doc-types-settings', icon: 'pi-file-edit' },
       { name: 'workflow_settings', href: '/dashboard/workflow-settings', icon: 'pi-sliders-h', orgAdminOnly: true },
       { name: 'gdpr_settings', href: '/dashboard/gdpr', icon: 'pi-lock' },
+      { name: 'subscription', href: '/dashboard/subscription', icon: 'pi-credit-card' },
     ],
   },
 ];
@@ -132,6 +133,7 @@ const allNavItems = [
       { name: 'doc_types_settings', href: '/dashboard/doc-types-settings', icon: 'pi-file-edit' },
       { name: 'workflow_settings', href: '/dashboard/workflow-settings', icon: 'pi-sliders-h', orgAdminOnly: true },
       { name: 'gdpr_settings', href: '/dashboard/gdpr', icon: 'pi-lock' },
+      { name: 'subscription', href: '/dashboard/subscription', icon: 'pi-credit-card' },
     ],
   },
 ];
@@ -196,7 +198,8 @@ export const useNavigation = () => {
         path.startsWith('/dashboard/users') ||
         path.startsWith('/dashboard/doc-types-settings') ||
         path.startsWith('/dashboard/workflow-settings') ||
-        path.startsWith('/dashboard/gdpr')) return 'settings';
+        path.startsWith('/dashboard/gdpr') ||
+        path.startsWith('/dashboard/subscription')) return 'settings';
     if (path.startsWith('/dashboard/admin')) return 'admin';
     return 'accueil';
   });

@@ -111,7 +111,7 @@ export const useAuditTrail = () => {
 
       let query = supabase
         .from('audit_log')
-        .select('*, profiles:user_id(email, full_name), organizations:organization_id(name)', { count: 'exact' })
+        .select('*, profiles!audit_log_user_id_fkey(email, full_name), organizations!audit_log_organization_id_fkey(name)', { count: 'exact' })
         .gte('created_at', sixMonthsAgo.toISOString())
         .order('created_at', { ascending: false })
         .range(page * rowsPerPage, (page + 1) * rowsPerPage - 1);

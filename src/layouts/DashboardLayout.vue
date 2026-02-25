@@ -67,7 +67,7 @@ watch(() => route.path, () => {
         <TopnavSidebar />
       </aside>
       <!-- Main content -->
-      <main class="flex-1 overflow-y-auto">
+      <main class="flex-1 overflow-y-auto overflow-x-hidden">
         <!-- Auth warning banners -->
         <div v-if="showAuthWarning" class="m-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg">
           <div class="flex items-center gap-3">
@@ -125,7 +125,7 @@ watch(() => route.path, () => {
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 overflow-y-auto">
+    <main class="flex-1 overflow-y-auto overflow-x-hidden">
       <!-- Spacer for mobile menu button -->
       <div class="md:hidden h-16"></div>
 

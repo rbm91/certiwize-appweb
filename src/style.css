@@ -17,3 +17,31 @@
 :root.dark {
   color-scheme: dark;
 }
+
+/* ── Responsive mobile ── */
+
+/* DataTables : scroll horizontal sur mobile */
+@media (max-width: 768px) {
+  .p-datatable-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Réduire le padding des pages sur mobile */
+  .card {
+    padding: 1rem !important;
+  }
+
+  /* DataTable : cellules ne wrap pas pour garder la lisibilité */
+  .p-datatable-table th,
+  .p-datatable-table td {
+    white-space: nowrap;
+    font-size: 0.85rem;
+  }
+
+  /* Boutons d'action plus compacts sur mobile */
+  .p-datatable .p-button-icon-only {
+    width: 2rem;
+    height: 2rem;
+  }
+}

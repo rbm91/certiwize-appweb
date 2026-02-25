@@ -476,7 +476,6 @@ onMounted(() => {
       :loading="loading" 
       paginator 
       :rows="10" 
-      tableStyle="min-width: 50rem"
       dataKey="id"
     >
       <template #empty>{{ t('learner.empty_list') }}</template>

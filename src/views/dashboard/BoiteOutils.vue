@@ -278,7 +278,6 @@ onMounted(() => {
       :paginator="filteredTemplates.length > 10"
       :rows="10"
       :rowsPerPageOptions="[10, 25, 50]"
-      tableStyle="min-width: 50rem"
       class="shadow-sm"
     >
       <template #empty>

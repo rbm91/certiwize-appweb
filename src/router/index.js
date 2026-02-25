@@ -350,6 +350,11 @@ const routes = [
         name: 'dashboard-gdpr',
         component: () => import('../views/dashboard/GDPRSettings.vue')
       },
+      {
+        path: 'subscription',
+        name: 'dashboard-subscription',
+        component: () => import('../views/dashboard/Subscription.vue')
+      },
 
       // ── Super-Admin (niveau plateforme) ──
       {

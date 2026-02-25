@@ -71,7 +71,8 @@
     "audit_blanc": "White Audit",
     "elearning": "E-learning",
     "parrainage": "Referral",
-    "gdpr_settings": "GDPR"
+    "gdpr_settings": "GDPR",
+    "subscription": "My Subscription"
   },
   "manual": {
     "title": "Quality Manual & Tools",
@@ -441,7 +442,7 @@
     "title": "Forgot password",
     "email": "Your Email",
     "submit": "Send link",
-    "success": "you will receive a reset link.",
+    "success": "If you have an account, you will receive a reset link.",
     "back_to_login": "Back to login"
   },
   "update_password": {
@@ -1096,12 +1097,15 @@
       "company": "Company name",
       "company_placeholder": "My Training Organization",
       "tax_id": "Tax identification number",
-      "tax_id_placeholder": "VAT number or tax ID",
+      "tax_id_placeholder": "Intracommunity VAT number",
       "email": "Email",
       "email_placeholder": "john.doe{'@'}company.com",
       "email_helper": "You will receive your login credentials at this address",
       "phone": "Phone number",
-      "phone_placeholder": "+1 234 567 890",
+      "phone_placeholder": "06-12-34-56-78",
+      "referral_code": "Referral code",
+      "referral_code_placeholder": "Enter your code",
+      "referral_verify": "Verify",
       "payment_title": "Payment information"
     },
     "payment_methods": {
@@ -1121,9 +1125,17 @@
     },
     "error": "An error occurred. Please try again.",
     "validation": {
-      "required_fields": "Please fill in all required fields."
+      "required_fields": "Please fill in all required fields.",
+      "invalid_email": "Invalid email address.",
+      "invalid_phone": "Invalid phone number (expected format: 06-12-34-56-78).",
+      "invalid_referral": "Invalid referral code. Please check and try again."
     },
-    "loading": "Redirecting to payment..."
+    "loading": "Redirecting to payment...",
+    "referral": {
+      "valid": "Referral code is valid!",
+      "invalid": "Invalid referral code.",
+      "accepted": "Referral code registered."
+    }
   },
   "checkout_success": {
     "title": "Payment successful!",
@@ -1136,7 +1148,20 @@
     "manual_login": "Your account has been created. Click below to log in.",
     "go_to_login": "Log in",
     "session_lost": "Your session has expired. Your payment was recorded — check your emails to log in.",
-    "error": "An error occurred during finalization. Your payment was received. Contact us at contact{'@'}certiwize.com"
+    "error": "An error occurred during finalization. Your payment was received. Contact us at contact{'@'}certiwize.com",
+    "summary_title": "Order summary",
+    "summary_plan": "Plan",
+    "summary_price": "Amount",
+    "summary_client": "Client",
+    "summary_company": "Company",
+    "summary_email": "Email",
+    "summary_payment": "Payment",
+    "summary_sepa": "SEPA Direct Debit",
+    "plan_monthly": "Certigestion — Monthly",
+    "plan_yearly": "Certigestion — Yearly",
+    "guarantee_title": "Satisfaction guaranteed",
+    "guarantee_text": "You have 30 days to test the platform. If you are not satisfied, a simple email is enough to get a full refund.",
+    "email_notice": "A confirmation email has been sent to your address. You will find your login credentials and all the information to get started."
   },
   "schedule": {
     "title": "Schedule a demo",

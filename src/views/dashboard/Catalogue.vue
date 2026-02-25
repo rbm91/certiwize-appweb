@@ -163,7 +163,9 @@ onMounted(async () => {
       <!-- TAB 1 : Bibliothèque formations              -->
       <!-- ============================================ -->
       <TabPanel header="Bibliothèque formations">
-        <!-- Bouton "Nouveau modèle" retiré temporairement -->
+        <div class="flex justify-end mb-4">
+          <Button label="Nouvelle formation" icon="pi pi-plus" severity="success" @click="router.push('/dashboard/catalogue/create')" />
+        </div>
 
         <DataTable
           :value="formations"
@@ -171,7 +173,6 @@ onMounted(async () => {
           paginator
           :rows="10"
           stripedRows
-          tableStyle="min-width: 50rem"
           dataKey="id"
           :globalFilterFields="['title']"
         >
@@ -232,7 +233,6 @@ onMounted(async () => {
           paginator
           :rows="10"
           stripedRows
-          tableStyle="min-width: 50rem"
           dataKey="id"
         >
           <template #empty>Aucune mission trouvée.</template>

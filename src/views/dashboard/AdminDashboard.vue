@@ -516,6 +516,7 @@ onMounted(() => {
     fetchUsers();
     fetchOrganizations();
     fetchGdprRequests();
+    fetchActivityLogs();
 });
 </script>
 
