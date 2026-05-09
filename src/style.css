@@ -1,9 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "primeicons/primeicons.css";
 
 @theme {
   --color-primary: #71ae54;
   --color-primary-dark: #5a8c43;
+
+  /* Editorial Clarity (Certigestion landing) */
+  --color-editorial-green: oklch(0.55 0.14 145);
+  --color-editorial-green-dark: oklch(0.45 0.14 145);
+  --color-editorial-charcoal: oklch(0.12 0.005 260);
+  --color-editorial-yellow: #F5C518;
+
+  /* Navy / Gold (Funnels) */
+  --color-navy: #1B1B3A;
+  --color-navy-light: #252550;
+  --color-navy-lighter: #2E2E5E;
+  --color-gold: #D4A03C;
+  --color-gold-dark: #B8872F;
+  --color-gold-light: #E8C06A;
+  --color-surface: #F7F5F0;
+  --color-surface-dark: #EDE9E0;
+  --color-funnel-text: #2D2D4A;
+  --color-funnel-muted: #8B8BA0;
+  /* Aliases pour les classes utilisées dans les pages funnels (text-text, text-muted) */
+  --color-text: #2D2D4A;
+  --color-muted: #8B8BA0;
+
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-funnel: "Lato", system-ui, sans-serif;
+  --font-editorial: "Source Sans 3", system-ui, sans-serif;
 }
 
 /* Configuration du mode sombre pour Tailwind CSS v4 */
@@ -16,4 +42,240 @@
 
 :root.dark {
   color-scheme: dark;
+}
+
+@layer components {
+  /* ─── Patterns décoratifs (Funnels Navy/Gold) ─── */
+  .bg-hex-pattern {
+    background-image:
+      linear-gradient(30deg, rgba(212, 160, 60, 0.04) 12%, transparent 12.5%, transparent 87%, rgba(212, 160, 60, 0.04) 87.5%),
+      linear-gradient(150deg, rgba(212, 160, 60, 0.04) 12%, transparent 12.5%, transparent 87%, rgba(212, 160, 60, 0.04) 87.5%),
+      linear-gradient(30deg, rgba(212, 160, 60, 0.04) 12%, transparent 12.5%, transparent 87%, rgba(212, 160, 60, 0.04) 87.5%),
+      linear-gradient(150deg, rgba(212, 160, 60, 0.04) 12%, transparent 12.5%, transparent 87%, rgba(212, 160, 60, 0.04) 87.5%),
+      linear-gradient(60deg, rgba(212, 160, 60, 0.06) 25%, transparent 25.5%, transparent 75%, rgba(212, 160, 60, 0.06) 75%),
+      linear-gradient(60deg, rgba(212, 160, 60, 0.06) 25%, transparent 25.5%, transparent 75%, rgba(212, 160, 60, 0.06) 75%);
+    background-size: 80px 140px;
+    background-position: 0 0, 0 0, 40px 70px, 40px 70px, 0 0, 40px 70px;
+  }
+
+  .bg-grid-pattern {
+    background-image:
+      linear-gradient(rgba(212, 160, 60, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(212, 160, 60, 0.05) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  .bg-diagonal-pattern {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      rgba(212, 160, 60, 0.03),
+      rgba(212, 160, 60, 0.03) 1px,
+      transparent 1px,
+      transparent 40px
+    );
+  }
+
+  .bg-dot-pattern {
+    background-image: radial-gradient(rgba(212, 160, 60, 0.08) 1px, transparent 1px);
+    background-size: 30px 30px;
+  }
+
+  /* ─── Boutons Funnels (Navy/Gold) ─── */
+  .btn-gold {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 36px;
+    background: var(--color-gold);
+    color: var(--color-navy);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-radius: 28px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-decoration: none;
+  }
+  .btn-gold:hover {
+    background: var(--color-gold-light);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(212, 160, 60, 0.3);
+  }
+
+  .btn-outline-light {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 36px;
+    background: transparent;
+    color: white;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-radius: 28px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    transition: all 0.3s;
+    text-decoration: none;
+  }
+  .btn-outline-light:hover {
+    border-color: white;
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .btn-outline-gold {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 36px;
+    background: transparent;
+    color: var(--color-gold);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-radius: 28px;
+    border: 2px solid var(--color-gold);
+    cursor: pointer;
+    transition: all 0.3s;
+    text-decoration: none;
+  }
+  .btn-outline-gold:hover {
+    background: var(--color-gold);
+    color: var(--color-navy);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(212, 160, 60, 0.3);
+  }
+
+  .btn-navy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 36px;
+    background: var(--color-navy);
+    color: white;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-radius: 28px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-decoration: none;
+  }
+  .btn-navy:hover {
+    background: var(--color-navy-light);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(27, 27, 58, 0.3);
+  }
+
+  /* ─── Editorial Clarity (Certigestion landing) ─── */
+  .marketing-container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  @media (min-width: 640px) {
+    .marketing-container { padding-left: 1.5rem; padding-right: 1.5rem; }
+  }
+  @media (min-width: 1024px) {
+    .marketing-container { padding-left: 2rem; padding-right: 2rem; max-width: 1280px; }
+  }
+
+  .section-label {
+    font-family: var(--font-editorial);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--color-editorial-green);
+  }
+
+  .accent-bar {
+    display: inline-block;
+    width: 2.5rem;
+    height: 3px;
+    background-color: var(--color-editorial-green);
+    margin-bottom: 1rem;
+  }
+
+  .section-dark {
+    background-color: var(--color-editorial-charcoal);
+    color: white;
+  }
+
+  .section-light {
+    background-color: oklch(0.97 0.002 260);
+  }
+
+  .editorial-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 2rem;
+    background: var(--color-editorial-yellow);
+    color: #111;
+    font-family: var(--font-editorial);
+    font-weight: 700;
+    font-size: 0.95rem;
+    border: none;
+    transition: opacity 0.2s ease;
+    text-decoration: none;
+  }
+  .editorial-btn-primary:hover { opacity: 0.9; }
+
+  .editorial-btn-green {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 2rem;
+    background: var(--color-editorial-green);
+    color: white;
+    font-family: var(--font-editorial);
+    font-weight: 700;
+    font-size: 0.95rem;
+    border: none;
+    transition: background-color 0.2s ease;
+    text-decoration: none;
+  }
+  .editorial-btn-green:hover { background: var(--color-editorial-green-dark); }
+
+  .editorial-btn-outline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    color: var(--color-editorial-green-dark);
+    border: 1px solid var(--color-editorial-green);
+    font-family: var(--font-editorial);
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: background-color 0.2s ease;
+    text-decoration: none;
+    border-radius: 4px;
+  }
+  .editorial-btn-outline:hover { background: rgba(113, 174, 84, 0.08); }
+
+  /* ─── Reveal animation (sera animée par script) ─── */
+  .reveal-section {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.65s ease, transform 0.65s ease;
+  }
+  .reveal-section.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

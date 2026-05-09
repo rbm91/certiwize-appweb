@@ -47,13 +47,14 @@ const baseNavigation = [
   },
 ];
 
-// Admin-only menu item
+// Admin-only menu items
 const adminNavItem = { name: 'admin', href: '/dashboard/admin', icon: 'pi-shield', adminOnly: true };
+const adminFunnelsNavItem = { name: 'admin_funnels', href: '/dashboard/admin/funnels', icon: 'pi-chart-line', adminOnly: true };
 
 // Computed navigation based on user role
 const navigation = computed(() => {
   if (authStore.isAdmin) {
-    return [...baseNavigation, adminNavItem];
+    return [...baseNavigation, adminNavItem, adminFunnelsNavItem];
   }
   return baseNavigation;
 });

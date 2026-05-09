@@ -1,13 +1,22 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import Navbar from './components/Navbar.vue';
 import ChatWidget from './components/ChatWidget.vue';
 import Toast from 'primevue/toast';
+import ConfirmDialog from 'primevue/confirmdialog';
 import { useAuthStore } from './stores/auth';
 
 const authStore = useAuthStore();
 const { locale } = useI18n();
+const route = useRoute();
+
+// Routes qui utilisent leur propre layout avec header dédié — on masque la Navbar globale.
+const STANDALONE_LAYOUT_PREFIXES = ['/landing', '/funnels', '/dashboard/admin/funnels'];
+const useStandaloneLayout = computed(() =>
+  STANDALONE_LAYOUT_PREFIXES.some((prefix) => route.path.startsWith(prefix))
+);
 
 // Timestamp du dernier rafraîchissement pour éviter les rafraîchissements trop fréquents
 let lastRefresh = Date.now();
@@ -60,7 +69,18 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300 flex flex-col">
+  <!-- Standalone layouts (landing/funnels/admin-funnels) : leur layout gère navbar+footer -->
+  <template v-if="useStandaloneLayout">
+    <router-view />
+    <Toast />
+    <ConfirmDialog />
+  </template>
+
+  <!-- Layout global de l'app authentifiée + pages publiques classiques -->
+  <div
+    v-else
+    class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300 flex flex-col"
+  >
     <Navbar />
 
     <main class="flex-grow pt-16">
@@ -68,6 +88,7 @@ onUnmounted(() => {
     </main>
 
     <Toast />
+    <ConfirmDialog />
 
     <ChatWidget />
   </div>

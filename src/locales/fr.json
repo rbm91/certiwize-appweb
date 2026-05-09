@@ -21,7 +21,8 @@
     "settings": "Paramètres",
     "company_settings": "Configuration Société",
     "quiz_settings": "Paramètres des Quiz",
-    "admin": "Administration"
+    "admin": "Administration",
+    "admin_funnels": "Tunnels de vente"
   },
   "manual": {
     "title": "Manuel Qualité & Outils",
