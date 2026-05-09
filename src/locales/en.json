@@ -21,7 +21,8 @@
     "settings": "Settings",
     "company_settings": "Company Settings",
     "quiz_settings": "Quiz Settings",
-    "admin": "Administration"
+    "admin": "Administration",
+    "admin_funnels": "Sales funnels"
   },
   "manual": {
     "title": "Quality Manual & Tools",

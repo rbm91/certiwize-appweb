@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
 import Login from '../views/Login.vue';
-import ProjectCreate from '../views/dashboard/ProjetCreate.vue';
 
 const routes = [
   {
@@ -40,6 +39,58 @@ const routes = [
     path: '/schedule',
     component: () => import('../views/public/Schedule.vue')
   },
+
+  // ─── Landing Certigestion (Editorial Clarity, public) ────────────────
+  {
+    path: '/landing',
+    component: () => import('../layouts/CertigestionLayout.vue'),
+    children: [
+      { path: '', name: 'landing-home', component: () => import('../views/landing/Home.vue') },
+      { path: 'offres', name: 'landing-offres', component: () => import('../views/landing/Offres.vue') },
+      { path: 'diagnostic', name: 'landing-diagnostic', component: () => import('../views/landing/Diagnostic.vue') },
+      { path: 'fonctionnalites', name: 'landing-fonctionnalites', component: () => import('../views/landing/Fonctionnalites.vue') },
+      { path: 'preuves', name: 'landing-preuves', component: () => import('../views/landing/Preuve.vue') },
+      { path: 'certiwize', name: 'landing-certiwize', component: () => import('../views/landing/CertiwizePont.vue') },
+      { path: 'contact', name: 'landing-contact', component: () => import('../views/landing/Contact.vue') },
+      { path: 't/structurer', name: 'landing-t-structurer', component: () => import('../views/landing/TunnelStructurer.vue') },
+      { path: 't/audit-risque', name: 'landing-t-audit-risque', component: () => import('../views/landing/TunnelAuditRisque.vue') },
+      { path: 't/premium', name: 'landing-t-premium', component: () => import('../views/landing/TunnelPremium.vue') },
+      { path: 'mentions-legales', name: 'landing-mentions', component: () => import('../views/landing/MentionsLegales.vue') },
+      { path: 'politique-confidentialite', name: 'landing-confidentialite', component: () => import('../views/landing/PolitiqueConfidentialite.vue') },
+      { path: 'cgv', name: 'landing-cgv', component: () => import('../views/landing/CGV.vue') },
+      { path: ':pathMatch(.*)*', name: 'landing-not-found', component: () => import('../views/landing/NotFound.vue') },
+    ],
+  },
+
+  // ─── Funnels (Navy/Gold, public) ─────────────────────────────────────
+  {
+    path: '/funnels',
+    component: () => import('../layouts/FunnelTunnelLayout.vue'),
+    children: [
+      { path: '', name: 'funnels-home', component: () => import('../views/funnels/Home.vue') },
+      { path: 'tunnel-1-outils', name: 'funnels-tunnel-1-outils', component: () => import('../views/funnels/Tunnel1Outils.vue') },
+      { path: 'tunnel-2-audit', name: 'funnels-tunnel-2-audit', component: () => import('../views/funnels/Tunnel2Audit.vue') },
+      { path: 'tunnel-3-structure', name: 'funnels-tunnel-3-structure', component: () => import('../views/funnels/Tunnel3Structure.vue') },
+      { path: 'tunnel-4-options', name: 'funnels-tunnel-4-options', component: () => import('../views/funnels/Tunnel4Options.vue') },
+      { path: 'tunnel-5-tarifs', name: 'funnels-tunnel-5-tarifs', component: () => import('../views/funnels/Tunnel5Tarifs.vue') },
+    ],
+  },
+
+  // ─── Admin Funnels (admin only) ──────────────────────────────────────
+  {
+    path: '/dashboard/admin/funnels',
+    component: () => import('../layouts/AdminFunnelLayout.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+    children: [
+      { path: '', name: 'admin-funnels-dashboard', component: () => import('../views/admin-funnels/Dashboard.vue') },
+      { path: 'list', name: 'admin-funnels-list', component: () => import('../views/admin-funnels/FunnelList.vue') },
+      { path: 'new', name: 'admin-funnels-new', component: () => import('../views/admin-funnels/FunnelForm.vue') },
+      { path: ':id/edit', name: 'admin-funnels-edit', component: () => import('../views/admin-funnels/FunnelForm.vue') },
+      { path: ':id/stats', name: 'admin-funnels-stats', component: () => import('../views/admin-funnels/FunnelStats.vue') },
+    ],
+  },
+
+  // ─── App authentifiée ────────────────────────────────────────────────
   {
     path: '/settings',
     component: () => import('../views/Settings.vue'),
@@ -159,8 +210,7 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
   // Attendre que l'authentification soit initialisée avant de vérifier
-  if (!authStore.initialized && to.meta.requiresAuth) {
-    // Utiliser la méthode Promise-based au lieu du polling
+  if (!authStore.initialized && (to.meta.requiresAuth || to.meta.requiresAdmin)) {
     try {
       await Promise.race([
         authStore.waitForInit(),
